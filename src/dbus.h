@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,11 +16,11 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_H
-#define DBUS_H
+#pragma once
 
 // Core elements and types
 #include "dbus_log.h"
+#include "dbus_names.h"
 #include "dbus_platform.h"
 #include "dbus_utils.h"
 
@@ -54,5 +55,3 @@
 
 // Introspective library
 #include "dbus_introspectable.h"
-
-#endif // DBUS_H

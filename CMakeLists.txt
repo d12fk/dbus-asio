@@ -16,6 +16,7 @@ set(HEADER_FILES
 	src/dbus_messageostream.h
 	src/dbus_messageistream.h
 	src/dbus_native.h
+	src/dbus_names.h
 	src/dbus_octetbuffer.h
 	src/dbus_platform.h
 	src/dbus_transport.h
@@ -55,6 +56,7 @@ add_library(dbus-asio SHARED
 	src/dbus_message_signal.cpp
 	src/dbus_native.cpp
 	src/dbus_native_messages.cpp
+	src/dbus_names.cpp
 	src/dbus_octetbuffer.cpp
 	src/dbus_platform.cpp
 	src/dbus_transport.cpp

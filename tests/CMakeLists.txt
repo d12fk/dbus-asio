@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.7.1)
 add_executable(dbus_asio_test dbus_asio_test.cpp)
 target_link_libraries(dbus_asio_test LINK_PRIVATE dbus-asio)
 
+add_executable(dbus_names_unittest dbus_names_unittest.cpp test_main.cpp)
+target_include_directories(dbus_names_unittest PRIVATE ../extern)
+target_link_libraries(dbus_names_unittest LINK_PRIVATE dbus-asio)
+add_test(NAME run_dbus_names_unittest COMMAND dbus_names_unittest)
+
 add_executable(dbus_platform_unittest dbus_platform_unittest.cpp test_main.cpp)
 target_include_directories(dbus_platform_unittest PRIVATE ../extern)
 target_link_libraries(dbus_platform_unittest LINK_PRIVATE dbus-asio)
