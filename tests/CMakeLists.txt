@@ -7,6 +7,11 @@ target_include_directories(dbus_names_unittest PRIVATE ../extern)
 target_link_libraries(dbus_names_unittest LINK_PRIVATE dbus-asio)
 add_test(NAME run_dbus_names_unittest COMMAND dbus_names_unittest)
 
+add_executable(dbus_matchrule_unittest dbus_matchrule_unittest.cpp test_main.cpp)
+target_include_directories(dbus_matchrule_unittest PRIVATE ../extern)
+target_link_libraries(dbus_matchrule_unittest LINK_PRIVATE dbus-asio)
+add_test(NAME run_dbus_matchrule_unittest COMMAND dbus_matchrule_unittest)
+
 add_executable(dbus_platform_unittest dbus_platform_unittest.cpp test_main.cpp)
 target_include_directories(dbus_platform_unittest PRIVATE ../extern)
 target_link_libraries(dbus_platform_unittest LINK_PRIVATE dbus-asio)
