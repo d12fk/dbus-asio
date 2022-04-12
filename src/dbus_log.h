@@ -21,6 +21,8 @@
 #include <cstddef>
 #include <stdarg.h>
 #include <string>
+#include <cstring>
+#include <iomanip>
 
 namespace DBus {
 
@@ -39,6 +41,8 @@ public:
 
     static void writeHex(size_t type, const std::string& prefix,
                          const std::string& hex);
+    static void writeHex(std::size_t type, const std::string& prefix,
+                         const void *data, std::size_t size);
     static void flush();
 
     static void setLevel(size_t lowest_visible_level);

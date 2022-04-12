@@ -44,28 +44,52 @@ void DBus::Log::write(size_t type, const char* msg, ...)
 void DBus::Log::writeHex(size_t type, const std::string& prefix,
                          const std::string& hex)
 {
-    if (!isActive(type)) {
+    writeHex(type, prefix, hex.data(), hex.size());
+}
+
+void DBus::Log::writeHex(std::size_t type, const std::string& prefix,
+    const void *data, std::size_t size)
+{
+    if (data == nullptr || !isActive(type)) {
         return;
     }
 
-    write(type, prefix.c_str());
+    std::size_t column = 0;
+    constexpr std::size_t maxColumns = 24;
+    constexpr std::size_t dividerAfter = 8;
+    char asciiBuf[maxColumns + maxColumns / dividerAfter + 1] = {};
+    char *ascii = asciiBuf;
+    const unsigned char *first = static_cast<const std::uint8_t *>(data);
 
-    size_t column = 0;
-    for (auto it : hex) {
-        write(type, "%.2x ", (uint8_t)it);
-        if (++column == 32) {
-            write(type, "\n");
+    std::ostringstream oss;
+    oss << prefix;
+    for (std::size_t i = 0; i < size; ++i) {
+        const unsigned char byte = *(first + i);
+        oss << std::hex << std::setw(2) << std::setfill('0')
+            << static_cast<const unsigned>(byte) << ' ';
+        *ascii++ = ::isprint(byte) ? byte : '.';
+        if (++column == maxColumns) {
             column = 0;
-            if (hex.size() % 32) { // pad the next line if there's likely to be one.
-                // i.e. not 32, 64, 96 length etc
-                write(type, std::string(prefix.length(), ' ').c_str()); // pad 2nd line to match prefix
+            oss << "| " << asciiBuf << '\n';
+            std::memset(asciiBuf, 0, sizeof(asciiBuf));
+            ascii = asciiBuf;
+            if (i + 1 < size) { // pad the next line if there is one.
+                oss << std::string(prefix.size(), ' ');
             }
         }
+        else if (column % dividerAfter == 0) {
+            oss << ' ';
+            *ascii++ = ' ';
+        }
     }
-    // Tidy up the last line
-    if (column) {
-        write(type, "\n");
+    // Finish the last line
+    if (column > 0) {
+        const std::size_t bytes = (maxColumns - column) * 3;
+        const std::size_t dividers = ((maxColumns - 1) / dividerAfter) - (column / dividerAfter);
+        oss << std::string(bytes + dividers, ' ') << "| " << asciiBuf << '\n';
     }
+
+    write(type, oss.str().c_str());
 }
 
 void DBus::Log::flush() { fflush(stderr); }
