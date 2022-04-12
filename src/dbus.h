@@ -25,6 +25,7 @@
 #include "dbus_names.h"
 #include "dbus_platform.h"
 #include "dbus_utils.h"
+#include "dbus_error.h"
 
 // Marshall/unmarshalling types
 #include "dbus_type.h"

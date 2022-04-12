@@ -8,6 +8,7 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
 set(HEADER_FILES
 	src/dbus_asio.h
 	src/dbus_auth.h
+	src/dbus_error.h
 	src/dbus.h
 	src/dbus_introspectable.h
 	src/dbus_log.h
