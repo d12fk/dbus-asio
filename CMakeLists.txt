@@ -6,6 +6,7 @@ set(CMAKE_CXX_VISIBILITY_PRESET protected)
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
 
 set(HEADER_FILES
+	src/dbus_asio.h
 	src/dbus_auth.h
 	src/dbus.h
 	src/dbus_introspectable.h
@@ -90,6 +91,26 @@ link_directories(${Boost_LIBRARY_DIRS})
 
 # PTHREAD DEPENDENCIES
 find_package (Threads REQUIRED)
+
+# ASIO
+option(DBUS_ASIO_STANDALONE "Use ASIO standalone library (non-boost)" OFF)
+if(DBUS_ASIO_STANDALONE)
+    add_compile_definitions(ASIO_STANDALONE)
+    set(DBUS_ASIO_INCLUDE "asio.hpp")
+    set(DBUS_ASIO_NAMESPACE "::asio")
+    set(DBUS_ERROR_CODE_NAMESPACE "::std")
+    set(DBUS_ERROR_CODE_ERRC "::std::errc")
+    set(DBUS_MAKE_ERROR_CODE "::std::make_error_code")
+else()
+    set(DBUS_ASIO_INCLUDE "boost/asio.hpp")
+    set(DBUS_ASIO_NAMESPACE "::boost::asio")
+    set(DBUS_ERROR_CODE_NAMESPACE "::boost::system")
+    set(DBUS_ERROR_CODE_ERRC "::boost::system::errc::errc_t")
+    set(DBUS_MAKE_ERROR_CODE "::boost::asio::error::make_error_code")
+endif()
+set(DBUS_ASIO_H ${CMAKE_CURRENT_SOURCE_DIR}/src/dbus_asio.h)
+configure_file(${DBUS_ASIO_H}.in ${DBUS_ASIO_H})
+unset(DBUS_ASIO_H)
 
 target_link_libraries (dbus-asio ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 

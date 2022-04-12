@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include "dbus_asio.h"
+
 // Core elements and types
 #include "dbus_log.h"
 #include "dbus_names.h"
