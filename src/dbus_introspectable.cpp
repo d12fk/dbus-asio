@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -164,24 +165,22 @@ DBus::Introspectable::Method::Method(const std::string& name,
 {
 }
 
-std::string DBus::Introspectable::Method::serialize() const
+std::string DBus::Introspectable::Method::serialize()
 {
     std::string result;
 
-    result += "<method name='" + m_Name + "'>";
+    result += "<method name='" + m_Name + "'>\n";
 
-    size_t idx = 0;
-    while (idx < m_InParams.size()) {
-        std::string sig(DBus::Type::extractSignature(m_InParams, idx));
-        result += "<arg direction='in' type='" + sig + "'/>\n";
-        idx += sig.size();
+    std::string code = m_InParams.getNextTypeCode();
+    while (!code.empty()) {
+        result += "<arg direction='in' type='" + code + "'/>\n";
+        code = m_InParams.getNextTypeCode();
     }
-    //
-    idx = 0;
-    while (idx < m_OutParams.size()) {
-        std::string sig(DBus::Type::extractSignature(m_OutParams, idx));
-        result += "<arg direction='out' type='" + sig + "'/>\n";
-        idx += sig.size();
+
+    code = m_OutParams.getNextTypeCode();
+    while (!code.empty()) {
+        result += "<arg direction='out' type='" + code + "'/>\n";
+        code = m_OutParams.getNextTypeCode();
     }
 
     result += "</method>";

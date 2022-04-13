@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,8 +16,9 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_INTROSPECTABLE_H
-#define DBUS_INTROSPECTABLE_H
+#pragma once
+
+#include "dbus_type_signature.h"
 
 #include <string>
 #include <vector>
@@ -57,11 +59,11 @@ namespace Introspectable {
         Method(const std::string& name, const std::string& in_params,
             const std::string& out_params);
 
-        std::string serialize() const;
+        std::string serialize();
 
         std::string m_Name;
-        std::string m_InParams;
-        std::string m_OutParams;
+        Type::Signature m_InParams;
+        Type::Signature m_OutParams;
     };
 
     class Property {
@@ -97,5 +99,3 @@ namespace Introspectable {
     // TODO: Support names for each property and signal
 } // namespace Introspectable
 } // namespace DBus
-
-#endif
