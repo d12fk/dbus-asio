@@ -43,6 +43,7 @@ namespace DBus {
 
         class Byte;
         class Boolean;
+        class UnixFd;
         class Double;
 
         class String;
@@ -69,6 +70,7 @@ namespace DBus {
         virtual std::string asString() const = 0;
 
         // Helper methods to return native types
+        static int asUnixFd(const Any& v);
         static bool asBoolean(const Any& v);
         static double asDouble(const Any& v);
         static std::string asString(const Any& v);

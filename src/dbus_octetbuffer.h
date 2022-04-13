@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,20 +16,26 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_OCTECTSTREAM_H
-#define DBUS_OCTECTSTREAM_H
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace DBus {
+
+using UnixFdBuffer = std::vector<int>;
 
 class OctetBuffer {
     const uint8_t* m_data;
     size_t m_size;
+    UnixFdBuffer m_fds;
 
 public:
     OctetBuffer(const uint8_t* data, size_t size);
+    OctetBuffer(OctetBuffer& other, std::size_t size);
+    OctetBuffer(const uint8_t* data, std::size_t dataSize,
+                const UnixFdBuffer& fds);
 
     size_t size() const;
     const uint8_t* data() const;
@@ -37,8 +44,7 @@ public:
     uint8_t operator[](unsigned long index) const;
     void copy(uint8_t* data, size_t size) const;
     size_t find(uint8_t byte) const;
+    int getUnixFd(std::uint32_t index) const;
 };
 
 } // namespace DBus
-
-#endif

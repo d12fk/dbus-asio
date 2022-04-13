@@ -34,11 +34,16 @@
 #include "dbus_type_uint16.h"
 #include "dbus_type_uint32.h"
 #include "dbus_type_uint64.h"
+#include "dbus_type_unixfd.h"
 #include "dbus_type_variant.h"
 
 //
 // Helper methods to extract native types from the opaque 'Any' type
 //
+int DBus::Type::asUnixFd(const Any& v)
+{
+    return static_cast<const UnixFd&>(v).dup();
+}
 
 bool DBus::Type::asBoolean(const Any& v)
 {
@@ -136,6 +141,7 @@ std::size_t DBus::Type::getAlignment(const std::string& typeCode)
         case Uint32::code:      return Uint32::alignment;
         case Uint64::code:      return Uint64::alignment;
         case Double::code:      return Double::alignment;
+        case UnixFd::code:      return UnixFd::alignment;
         case String::code:      return String::alignment;
         case ObjectPath::code:  return ObjectPath::alignment;
         case Signature::code:   return Signature::alignment;
@@ -161,6 +167,7 @@ DBus::Type::Any DBus::Type::create(const std::string& typeCode)
         case Uint32::code:      return Uint32();
         case Uint64::code:      return Uint64();
         case Double::code:      return Double();
+        case UnixFd::code:      return UnixFd();
         case String::code:      return String();
         case ObjectPath::code:  return ObjectPath();
         case Signature::code:   return Signature();
@@ -178,7 +185,8 @@ bool DBus::Type::isBasicTypeCode(const int code) {
             code == Int16::code || code == Uint16::code ||
             code == Int32::code || code == Uint32::code ||
             code == Int64::code || code == Uint64::code ||
-            code == Double::code || code == String::code ||
-            code == ObjectPath::code || code == Signature::code);
+            code == Double::code || code == UnixFd::code ||
+            code == String::code || code == ObjectPath::code ||
+            code == Signature::code);
 }
 

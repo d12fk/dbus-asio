@@ -15,8 +15,8 @@ namespace test {
     {
         Type::Struct dbusStruct("(uu)");
 
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         dbusStruct.unmarshall(istream);
 
         REQUIRE(dbusStruct.size() == 2);

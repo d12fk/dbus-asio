@@ -39,6 +39,7 @@ set(HEADER_FILES
 	src/dbus_type_uint16.h
 	src/dbus_type_uint32.h
 	src/dbus_type_uint64.h
+	src/dbus_type_unixfd.h
 	src/dbus_type_variant.h
 	src/dbus_utils.h
 )
@@ -78,6 +79,7 @@ add_library(dbus-asio SHARED
 	src/dbus_type_uint16.cpp
 	src/dbus_type_uint32.cpp
 	src/dbus_type_uint64.cpp
+	src/dbus_type_unixfd.cpp
 	src/dbus_type_variant.cpp
 	src/dbus_utils.cpp
 )

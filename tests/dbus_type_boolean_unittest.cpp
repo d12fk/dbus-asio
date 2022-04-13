@@ -34,8 +34,8 @@ namespace test {
         stream.writeInt32(true);
 
         Type::Boolean boolean;
-        MessageIStream istream((uint8_t*)stream.data.data(), stream.data.size(),
-            false);
+        OctetBuffer buf((uint8_t*)stream.data.data(), stream.data.size());
+        MessageIStream istream(buf, false);
         TestUnmarshallFromMessageIStream<uint32_t, Type::Boolean>(1, boolean,
             istream);
     }

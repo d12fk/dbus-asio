@@ -22,8 +22,8 @@ namespace test {
         const std::string& key, uint32_t value)
     {
         Type::DictEntry dictEntry("{su}");
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         dictEntry.unmarshall(istream);
 
         std::stringstream ss;
@@ -66,8 +66,8 @@ namespace test {
         const std::pair<double, uint8_t>& value)
     {
         Type::DictEntry dictEntry("{i(dy)}");
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         dictEntry.unmarshall(istream);
 
         std::stringstream ss;
@@ -194,7 +194,8 @@ namespace test {
         };
 
         Type::DictEntry dictEntry("{vu}");
-        MessageIStream istream(encoded.data(), encoded.size(), false);
+        OctetBuffer buf(encoded.data(), encoded.size());
+        MessageIStream istream(buf, false);
         REQUIRE_THROWS_WITH(dictEntry.unmarshall(istream), "DictEntry key has invalid basic type: v");
     }
 

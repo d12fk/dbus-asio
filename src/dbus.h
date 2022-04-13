@@ -45,6 +45,7 @@
 #include "dbus_type_uint16.h"
 #include "dbus_type_uint32.h"
 #include "dbus_type_uint64.h"
+#include "dbus_type_unixfd.h"
 #include "dbus_type_variant.h"
 
 // Functionality

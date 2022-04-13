@@ -30,6 +30,7 @@ DBus::Type::Any& DBus::Type::Any::clone(const Any& v)
     switch (m_valueType) {
     case Value::Byte:       new(&m_byte) Byte(v);             break;
     case Value::Double:     new(&m_double) Double(v);         break;
+    case Value::UnixFd:     new(&m_unixFd) UnixFd(v);         break;
     case Value::Boolean:    new(&m_boolean) Boolean(v);       break;
     case Value::Int16:      new(&m_int16) Int16(v);           break;
     case Value::Int32:      new(&m_int32) Int32(v);           break;
@@ -65,6 +66,7 @@ void DBus::Type::Any::destroy()
     case Value::Uint32:     m_uint32.~Uint32();         break;
     case Value::Uint64:     m_uint64.~Uint64();         break;
     case Value::Double:     m_double.~Double();         break;
+    case Value::UnixFd:     m_unixFd.~UnixFd();         break;
     case Value::String:     m_string.~String();         break;
 
     case Value::Array:      delete m_array;             break;
@@ -177,6 +179,12 @@ DBus::Type::Any::Any(const Uint64& v)
     : m_valueType(Value::Uint64)
 {
     new(&m_uint64) Uint64(v);
+}
+
+DBus::Type::Any::Any(const UnixFd& v)
+    : m_valueType(Value::UnixFd)
+{
+    new(&m_unixFd) UnixFd(v);
 }
 
 DBus::Type::Any::Any(const double& v)
@@ -349,6 +357,13 @@ DBus::Type::Any::operator const Double&() const
     return tryVariantTo<Double>();
 }
 
+DBus::Type::Any::operator const UnixFd&() const
+{
+    if (m_valueType == Value::UnixFd)
+        return m_unixFd;
+    return tryVariantTo<UnixFd>();
+}
+
 DBus::Type::Any::operator const String&() const
 {
     if (m_valueType == Value::String)
@@ -422,6 +437,7 @@ const DBus::Type& DBus::Type::Any::value() const
     case Value::Uint32:     return m_uint32;
     case Value::Uint64:     return m_uint64;
     case Value::Double:     return m_double;
+    case Value::UnixFd:     return m_unixFd;
     case Value::String:     return m_string;
     case Value::Signature:  return m_signature;
     case Value::ObjectPath: return m_objectPath;
@@ -469,6 +485,7 @@ void DBus::Type::Any::unmarshall(MessageIStream& stream)
     case Value::Uint32:     return m_uint32.unmarshall(stream);
     case Value::Uint64:     return m_uint64.unmarshall(stream);
     case Value::Double:     return m_double.unmarshall(stream);
+    case Value::UnixFd:     return m_unixFd.unmarshall(stream);
     case Value::String:     return m_string.unmarshall(stream);
     case Value::Signature:  return m_signature.unmarshall(stream);
     case Value::ObjectPath: return m_objectPath.unmarshall(stream);

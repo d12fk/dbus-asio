@@ -16,8 +16,8 @@ namespace test {
     {
         // An array of structures
         Type::String dbusString;
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         dbusString.unmarshall(istream);
 
         REQUIRE(dbusString.asString() == str);

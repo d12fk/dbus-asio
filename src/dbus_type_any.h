@@ -29,6 +29,7 @@
 #include "dbus_type_uint16.h"
 #include "dbus_type_uint32.h"
 #include "dbus_type_uint64.h"
+#include "dbus_type_unixfd.h"
 
 #include <exception>
 
@@ -40,7 +41,7 @@ namespace DBus {
     class Type::Any : public Type {
     protected:
         enum class Value {
-            None, Byte, Boolean, Double,
+            None, Byte, Boolean, UnixFd, Double,
             Int16, Int32, Int64, Uint16, Uint32, Uint64,
             String, ObjectPath, Signature,
             Array, Struct, Variant, DictEntry
@@ -50,6 +51,7 @@ namespace DBus {
         union {
             Byte m_byte;
             Boolean m_boolean;
+            UnixFd m_unixFd;
             Double m_double;
 
             Int16 m_int16;
@@ -83,6 +85,7 @@ namespace DBus {
         Any(const Byte& v);
         Any(const bool& v);
         Any(const Boolean& v);
+        Any(const UnixFd& v);
         Any(const double& v);
         Any(const Double& v);
         Any(const std::int16_t& v);
@@ -114,6 +117,7 @@ namespace DBus {
 
         explicit operator const Byte&() const;
         explicit operator const Boolean&() const;
+        explicit operator const UnixFd&() const;
         explicit operator const Double&() const;
         explicit operator const Int16&() const;
         explicit operator const Int32&() const;

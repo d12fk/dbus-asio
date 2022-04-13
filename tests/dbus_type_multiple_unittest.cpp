@@ -97,8 +97,8 @@ Array a{i(sa{sa{s(ys)}})} : [
         SECTION("Complete")
         {
             Type::Array output(input.getSignature());
-            MessageIStream istream((uint8_t*)ostream.data.data(), ostream.data.size(),
-                false);
+            OctetBuffer buf((uint8_t*)ostream.data.data(), ostream.data.size());
+            MessageIStream istream(buf, false);
             output.unmarshall(istream);
 
             REQUIRE(input.toString() == output.toString());
@@ -116,7 +116,8 @@ Array a{i(sa{sa{s(ys)}})} : [
                     std::string data = ostream.data.substr(0, truncate_at);
                     Type::Array output(input.getSignature());
 
-                    MessageIStream istream((uint8_t*)data.data(), data.size(), false);
+                    OctetBuffer buf((uint8_t*)data.data(), data.size());
+                    MessageIStream istream(buf, false);
                     REQUIRE_THROWS(output.unmarshall(istream));
                 }
             }

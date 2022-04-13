@@ -82,6 +82,11 @@ target_include_directories(dbus_type_uint64_unittest PRIVATE ../extern)
 target_link_libraries(dbus_type_uint64_unittest LINK_PRIVATE dbus-asio)
 add_test(NAME run_dbus_type_uint64_unittest COMMAND dbus_type_uint64_unittest)
 
+add_executable(dbus_type_unixfd_unittest dbus_type_unixfd_unittest.cpp test_main.cpp)
+target_include_directories(dbus_type_unixfd_unittest PRIVATE ../extern)
+target_link_libraries(dbus_type_unixfd_unittest LINK_PRIVATE dbus-asio)
+add_test(NAME run_dbus_type_unixfd_unittest COMMAND dbus_type_unixfd_unittest)
+
 add_executable(dbus_type_double_unittest dbus_type_double_unittest.cpp test_main.cpp)
 target_include_directories(dbus_type_double_unittest PRIVATE ../extern)
 target_link_libraries(dbus_type_double_unittest LINK_PRIVATE dbus-asio)

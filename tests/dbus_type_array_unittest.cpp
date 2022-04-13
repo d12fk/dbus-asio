@@ -1,5 +1,6 @@
 #include "dbus_messageistream.h"
 #include "dbus_messageostream.h"
+#include "dbus_octetbuffer.h"
 #include "dbus_messageprotocol.h"
 #include "dbus_type.h"
 #include "dbus_type_array.h"
@@ -29,8 +30,8 @@ namespace test {
         // An array of structures
         Type::Array array("a(i)");
 
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         array.unmarshall(istream);
 
         REQUIRE(array.size() == 2);
@@ -172,8 +173,8 @@ namespace test {
         input.marshall(ostream);
 
         Type::Array output(input.getSignature());
-        MessageIStream istream((uint8_t*)ostream.data.data(), ostream.data.size(),
-            false);
+        OctetBuffer buf((uint8_t*)ostream.data.data(), ostream.data.size());
+        MessageIStream istream(buf, false);
         output.unmarshall(istream);
 
         REQUIRE(input.toString() == output.toString());
