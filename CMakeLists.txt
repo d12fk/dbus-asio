@@ -50,12 +50,8 @@ add_library(dbus-asio SHARED
 	src/dbus_log.cpp
 	src/dbus_matchrule.cpp
 	src/dbus_message.cpp
-	src/dbus_message_error.cpp
 	src/dbus_messageistream.cpp
-	src/dbus_message_methodcall.cpp
-	src/dbus_message_methodreturn.cpp
 	src/dbus_messageprotocol.cpp
-	src/dbus_message_signal.cpp
 	src/dbus_native.cpp
 	src/dbus_native_messages.cpp
 	src/dbus_names.cpp
