@@ -23,76 +23,80 @@ namespace test {
     {
         Type::Struct dbusStruct1;
         dbusStruct1.add(Type::Byte(85));
-        dbusStruct1.add(Type::String("BrightSign"));
+        dbusStruct1.add("BrightSign");
 
         Type::Struct dbusStruct2;
         dbusStruct2.add(Type::Byte(42));
-        dbusStruct2.add(Type::String("Arthur"));
+        dbusStruct2.add("Arthur");
 
         Type::Struct dbusStruct3;
         dbusStruct3.add(Type::Byte(99));
-        dbusStruct3.add(Type::String("Red Balloons"));
+        dbusStruct3.add("Red Balloons");
 
-        Type::Array dbusArray;
-        dbusArray.add(Type::DictEntry(Type::String("KeyKey"), dbusStruct1));
-        dbusArray.add(Type::DictEntry(Type::String("Another key"), dbusStruct2));
-        dbusArray.add(Type::DictEntry(Type::String("Anarchy"), dbusStruct3));
+        Type::Array dbusArray1;
+        dbusArray1.add(Type::DictEntry("KeyKey", dbusStruct1));
+        dbusArray1.add(Type::DictEntry("Another key", dbusStruct2));
+        dbusArray1.add(Type::DictEntry("Anarchy", dbusStruct3));
+
+        Type::Array dbusArray2;
+        dbusArray2.add(Type::DictEntry("Key", dbusArray1));
 
         Type::Struct dbusStructTop;
-        dbusStructTop.add(Type::String("This is a long string value"));
-        dbusStructTop.add(Type::DictEntry(Type::String("Key"), dbusArray));
+        dbusStructTop.add("This is a long string value");
+        dbusStructTop.add(dbusArray2);
 
-        Type::DictEntry input(Type::Int32(131073), dbusStructTop);
+        Type::Array input;
+        input.add(Type::DictEntry(Type::Int32(131073), dbusStructTop));
 
-        REQUIRE(DBus::Type::getMarshallingSignature(input) == "{i(s{sa{s(ys)}})}");
+        REQUIRE(input.getSignature() == "a{i(sa{sa{s(ys)}})}");
         REQUIRE('\n' + input.toString() ==
             R"(
-DictEntry ({i(s{sa{s(ys)}})}) : {
-   key:      Int32 131073 (0x20001)
-   value:    Struct (s{sa{s(ys)}}) <
-      String (27) "This is a long string value"
-      DictEntry ({sa{s(ys)}}) : {
-         key:            String (3) "Key"
-         value:          Array (a{s(ys)}) [
-            [0] =
-               DictEntry ({s(ys)}) : {
-                  key:                     String (6) "KeyKey"
-                  value:                   Struct (ys) <
-                     Byte 85 (0x55)
-                     String (10) "BrightSign"
-                  >
-               }
-            [1] =
-               DictEntry ({s(ys)}) : {
-                  key:                     String (11) "Another key"
-                  value:                   Struct (ys) <
-                     Byte 42 (0x2a)
-                     String (6) "Arthur"
-                  >
-               }
-            [2] =
-               DictEntry ({s(ys)}) : {
-                  key:                     String (7) "Anarchy"
-                  value:                   Struct (ys) <
-                     Byte 99 (0x63)
-                     String (12) "Red Balloons"
-                  >
-               }
+Array a{i(sa{sa{s(ys)}})} : [
+   [0] DictEntry {i(sa{sa{s(ys)}})} : {
+      key:      Int32 131073 (0x00020001)
+      value:    Struct (sa{sa{s(ys)}}) : (
+         String (27) "This is a long string value"
+         Array a{sa{s(ys)}} : [
+            [0] DictEntry {sa{s(ys)}} : {
+               key:      String (3) "Key"
+               value:    Array a{s(ys)} : [
+                  [0] DictEntry {s(ys)} : {
+                     key:      String (6) "KeyKey"
+                     value:    Struct (ys) : (
+                        Byte 85 (0x55)
+                        String (10) "BrightSign"
+                     )
+                  }
+                  [1] DictEntry {s(ys)} : {
+                     key:      String (11) "Another key"
+                     value:    Struct (ys) : (
+                        Byte 42 (0x2a)
+                        String (6) "Arthur"
+                     )
+                  }
+                  [2] DictEntry {s(ys)} : {
+                     key:      String (7) "Anarchy"
+                     value:    Struct (ys) : (
+                        Byte 99 (0x63)
+                        String (12) "Red Balloons"
+                     )
+                  }
+               ]
+            }
          ]
-      }
-   >
-}
+      )
+   }
+]
 )");
 
         MessageOStream ostream;
         input.marshall(ostream);
 
-        REQUIRE(ostream.data.size() == 165);
+        REQUIRE(ostream.data.size() == 181);
 
         SECTION("Complete")
         {
-            Type::DictEntry output;
-            output.setSignature(input.getSignature());
+            Type::Array output(input.getSignature());
             MessageIStream istream((uint8_t*)ostream.data.data(), ostream.data.size(),
                 false);
             output.unmarshall(istream);
@@ -110,8 +114,7 @@ DictEntry ({i(s{sa{s(ys)}})}) : {
                 {
                     INFO("Truncate at " << truncate_at << " from " << ostream.data.size());
                     std::string data = ostream.data.substr(0, truncate_at);
-                    Type::DictEntry output;
-                    output.setSignature(input.getSignature());
+                    Type::Array output(input.getSignature());
 
                     MessageIStream istream((uint8_t*)data.data(), data.size(), false);
                     REQUIRE_THROWS(output.unmarshall(istream));

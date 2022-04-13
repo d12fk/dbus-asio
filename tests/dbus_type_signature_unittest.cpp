@@ -47,7 +47,7 @@ namespace test {
 
     TEST_CASE("Marshall and unmarshall signature")
     {
-        const std::string str("{ii}");
+        const std::string str("a{ii}");
         Type::Signature dbusString(str);
 
         MessageOStream stream;

@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,35 +16,54 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_TYPE_SIGNATURE_H
-#define DBUS_TYPE_SIGNATURE_H
+#pragma once
 
-#include "dbus_type_base.h"
+#include "dbus_type.h"
+
+#include <stdexcept>
 
 namespace DBus {
-class MessageOStream;
-class MessageIStream;
 
-namespace Type {
+    using InvalidSignature = std::runtime_error;
 
-    class Signature : public Base {
+    class Type::Signature : public Basic {
     public:
-        Signature();
-        Signature(const std::string& v);
+        Signature() = default;
+        Signature(const Signature& other) = default;
+        Signature(const std::string& v, std::size_t height = 0);
 
-        void marshall(MessageOStream& stream) const;
-        void unmarshall(MessageIStream& stream);
+        Signature& operator=(const Signature& other) = default;
 
-        std::string toString(const std::string& prefix = "") const;
-        std::string asString() const;
-        const std::string& getValue() const;
+        bool operator==(const Signature& other) {
+            return m_Value == other.m_Value; }
+        bool operator!=(const Signature& other) {
+            return m_Value != other.m_Value; }
 
-        static const std::string s_StaticTypeCode;
+        static constexpr const char *name = "Signature";
+        static constexpr std::size_t alignment = 1;
+        static constexpr const char code = 'g';
+
+        std::string getName() const override { return name; }
+        std::size_t getAlignment() const override { return alignment; }
+        std::string getSignature() const override { return std::string(1, code); }
+
+        void marshall(MessageOStream& stream) const override;
+        void unmarshall(MessageIStream& stream) override;
+
+        std::string toString(const std::string&) const override;
+        std::string asString() const override;
+
+        bool empty() const { return m_Value.empty(); }
+        std::string getNextTypeCode();
 
     protected:
+        static constexpr std::size_t MaxLength = 255;
+        static constexpr std::size_t MaxStructDepth = 32;
+        static constexpr std::size_t MaxArrayDepth = 32;
+        static constexpr std::size_t MaxDepth = MaxStructDepth + MaxArrayDepth;
+
+        std::size_t m_typeCodeIndex = 0;
         std::string m_Value;
     };
-} // namespace Type
-} // namespace DBus
 
-#endif
+} // namespace DBus

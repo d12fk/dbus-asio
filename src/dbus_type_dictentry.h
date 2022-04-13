@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,41 +16,44 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_TYPE_DICTENTRY_H
-#define DBUS_TYPE_DICTENTRY_H
+#pragma once
 
-#include "dbus_type_base.h"
+#include "dbus_type_any.h"
 
 namespace DBus {
 
-class MessageOStream;
-class MessageIStream;
+    class Signature;
 
-namespace Type {
-
-    class DictEntry : public Base {
+    class Type::DictEntry : public Container {
     public:
-        DictEntry() {}
-        DictEntry(const DBus::Type::Generic& key, const DBus::Type::Generic& value);
-        DictEntry(const std::string& key, std::string& value);
-        DictEntry(const std::string& key, uint32_t value);
+        DictEntry(const std::string& signature);
+        DictEntry(const DBus::Type::Any& key, const DBus::Type::Any& value);
 
-        std::string getSignature() const;
-        size_t getAlignment() const { return 8; }
-        void marshall(MessageOStream& stream) const;
-        void unmarshall(MessageIStream& stream);
+        static constexpr const char *name = "DictEntry";
+        static constexpr const char code_start = '{';
+        static constexpr const char code_end = '}';
 
-        std::string toString(const std::string& prefix = "") const;
-        std::string asString() const;
+        static constexpr std::size_t alignment = 8;
+        static constexpr const char code = code_start;
 
-        void set(const DBus::Type::Generic& key, const DBus::Type::Generic& value);
+        std::string getName() const override { return name; }
+        std::size_t getAlignment() const override { return alignment; };
+        std::string getSignature() const override;
 
-        static const std::string s_StaticTypeCode;
+        void marshall(MessageOStream& stream) const override;
+        void unmarshall(MessageIStream& stream) override;
+
+        const Any& key() const { return m_Value.first; };
+        const Any& value() const { return m_Value.second; };
+
+        std::string toString(const std::string& prefix = "") const override;
+        std::string asString() const override;
+
+        void set(const DBus::Type::Any& key, const DBus::Type::Any& value);
 
     protected:
-        std::pair<Generic, Generic> m_Value;
+        Signature m_signature;
+        std::pair<Any, Any> m_Value = {};
     };
-} // namespace Type
-} // namespace DBus
 
-#endif
+} // namespace DBus

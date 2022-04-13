@@ -77,8 +77,7 @@ namespace test {
         MessageOStream ostream;
         input.marshall(ostream);
 
-        Type::Variant output;
-        output.setSignature(input.getSignature());
+        Type::Variant output(input.getSignature());
         MessageIStream istream((uint8_t*)ostream.data.data(), ostream.data.size(),
             false);
         output.unmarshall(istream);

@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,44 +16,35 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_TYPE_VARIANT_H
-#define DBUS_TYPE_VARIANT_H
+#pragma once
 
-#include "dbus_type_base.h"
+#include "dbus_type_any.h"
 
 namespace DBus {
-class MessageOStream;
-class MessageIStream;
 
-namespace Type {
-    class ObjectPath;
-    class Signature;
-    class String;
-    class Uint32;
-
-    class Variant : public Base {
+    class Type::Variant : public Container {
     public:
-        Variant();
-        Variant(const DBus::Type::ObjectPath& v);
-        Variant(const DBus::Type::String& v);
-        Variant(const DBus::Type::Uint32& v);
-        Variant(const DBus::Type::Signature& v);
+        Variant() = default;
+        Variant(const Any& v);
 
-        size_t getAlignment() const { return 8; }
-        void marshall(MessageOStream& stream) const;
-        void unmarshall(MessageIStream& stream);
+        static constexpr const char *name = "Variant";
+        static constexpr const char code = 'v';
+        static constexpr std::size_t alignment = 1;
 
-        std::string toString(const std::string& prefix = "") const;
-        std::string asString() const;
-        const DBus::Type::Generic& getValue() const;
+        std::string getName() const override { return name; }
+        std::size_t getAlignment() const override { return alignment; };
+        std::string getSignature() const override { return std::string(1, code); }
 
-        static const std::string s_StaticTypeCode;
+        void marshall(MessageOStream& stream) const override;
+        void unmarshall(MessageIStream& stream) override;
+
+        std::string toString(const std::string& prefix = "") const override;
+        std::string asString() const override;
+
+        const Any& getValue() const;
 
     private:
-        DBus::Type::Generic m_Value;
-        std::string m_ContainedSignature;
+        Any m_Value;
     };
-} // namespace Type
-} // namespace DBus
 
-#endif
+} // namespace DBus

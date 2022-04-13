@@ -27,8 +27,7 @@ namespace test {
         int32_t v2)
     {
         // An array of structures
-        Type::Array array;
-        array.setSignature("a(i)");
+        Type::Array array("a(i)");
 
         MessageIStream istream((uint8_t*)stream.data(), stream.size(),
             byteOrder != __LITTLE_ENDIAN);
@@ -36,11 +35,11 @@ namespace test {
 
         REQUIRE(array.size() == 2);
 
-        const Type::Struct& struct1 = boost::any_cast<const Type::Struct&>(array.getContents()[0]);
-        const Type::Struct& struct2 = boost::any_cast<const Type::Struct&>(array.getContents()[1]);
+        const Type::Struct& struct1 = DBus::Type::refStruct(array[0]);
+        const Type::Struct& struct2 = DBus::Type::refStruct(array[1]);
 
-        REQUIRE(Type::asString(struct1[0]) == std::to_string(v1));
-        REQUIRE(Type::asString(struct2[0]) == std::to_string(v2));
+        REQUIRE(Type::asInt32(struct1[0]) == v1);
+        REQUIRE(Type::asInt32(struct2[0]) == v2);
     }
 
     void TestUnmarshallFromMessageIStream(unsigned byteOrder, int32_t v1,
@@ -75,7 +74,7 @@ namespace test {
 
     TEST_CASE("Marshall and unmarshall array of structs")
     {
-        Type::Array array;
+        Type::Array array("a(i)");
         Type::Struct struct1;
         DBus::Type::Int32 value1(-1);
         Type::Struct struct2;
@@ -83,7 +82,6 @@ namespace test {
 
         struct1.add(value1);
         struct2.add(value2);
-        array.setSignature("a(i)");
         array.add(struct1);
         array.add(struct2);
         MessageOStream stream;
@@ -164,7 +162,7 @@ namespace test {
         {
             input.add(DBus::Type::Signature("i"));
             input.add(DBus::Type::Signature("(id)"));
-            input.add(DBus::Type::Signature("{id}"));
+            input.add(DBus::Type::Signature("a{id}"));
             input.add(DBus::Type::Signature("as"));
         }
 
@@ -173,8 +171,7 @@ namespace test {
         MessageOStream ostream;
         input.marshall(ostream);
 
-        Type::Array output;
-        output.setSignature(input.getSignature());
+        Type::Array output(input.getSignature());
         MessageIStream istream((uint8_t*)ostream.data.data(), ostream.data.size(),
             false);
         output.unmarshall(istream);

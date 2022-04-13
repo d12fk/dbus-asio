@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,23 +16,23 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
+#include "dbus_names.h"
 #include "dbus_type_objectpath.h"
 #include "dbus_messageostream.h"
-#include "dbus_type_string.h"
 
-const std::string DBus::Type::ObjectPath::s_StaticTypeCode("o");
-
-DBus::Type::ObjectPath::ObjectPath() { setSignature(s_StaticTypeCode); }
+DBus::Type::ObjectPath::ObjectPath(const char* v)
+    : ObjectPath(DBus::ObjectPath(v))
+{}
 
 DBus::Type::ObjectPath::ObjectPath(const std::string& v)
+    : ObjectPath(DBus::ObjectPath(v))
+{}
+
+DBus::Type::ObjectPath::ObjectPath(const DBus::ObjectPath& v)
     : String(v)
-{
-    setSignature(s_StaticTypeCode);
-}
+{}
 
 void DBus::Type::ObjectPath::marshall(MessageOStream& stream) const
 {
-    // Exactly the same as STRING except the content must be a valid object path
-    // (see above).
     Type::String::marshall(stream);
 }

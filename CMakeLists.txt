@@ -22,13 +22,13 @@ set(HEADER_FILES
 	src/dbus_octetbuffer.h
 	src/dbus_platform.h
 	src/dbus_transport.h
+	src/dbus_type.h
+	src/dbus_type_any.h
 	src/dbus_type_array.h
-	src/dbus_type_base.h
 	src/dbus_type_boolean.h
 	src/dbus_type_byte.h
 	src/dbus_type_dictentry.h
 	src/dbus_type_double.h
-	src/dbus_type.h
 	src/dbus_type_int16.h
 	src/dbus_type_int32.h
 	src/dbus_type_int64.h
@@ -41,7 +41,6 @@ set(HEADER_FILES
 	src/dbus_type_uint64.h
 	src/dbus_type_variant.h
 	src/dbus_utils.h
-	src/dbus_validation.h
 )
 
 add_library(dbus-asio SHARED
@@ -62,11 +61,11 @@ add_library(dbus-asio SHARED
 	src/dbus_octetbuffer.cpp
 	src/dbus_platform.cpp
 	src/dbus_transport.cpp
+	src/dbus_type.cpp
+	src/dbus_type_any.cpp
 	src/dbus_type_array.cpp
-	src/dbus_type_base.cpp
 	src/dbus_type_boolean.cpp
 	src/dbus_type_byte.cpp
-	src/dbus_type.cpp
 	src/dbus_type_dictentry.cpp
 	src/dbus_type_double.cpp
 	src/dbus_type_int16.cpp
@@ -81,7 +80,6 @@ add_library(dbus-asio SHARED
 	src/dbus_type_uint64.cpp
 	src/dbus_type_variant.cpp
 	src/dbus_utils.cpp
-	src/dbus_validation.cpp
 )
 
 # DBUS DEPENDENCIES

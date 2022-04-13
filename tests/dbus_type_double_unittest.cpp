@@ -27,9 +27,7 @@ namespace test {
         MessageIStream stream((uint8_t*)&u, sizeof(u), byteOrder != __BYTE_ORDER);
         dbusType.unmarshall(stream);
 
-        std::stringstream ss;
-        ss << value;
-        REQUIRE(dbusType.asString() == ss.str());
+        REQUIRE(static_cast<double>(dbusType) == value);
     }
 
     TEST_CASE("Unmarshall double little endian from MessageIStream")
@@ -54,9 +52,7 @@ namespace test {
         MessageIStream istream((uint8_t*)stream.data.data(), stream.size(), false);
         dbusType.unmarshall(istream);
 
-        std::stringstream ss;
-        ss << value;
-        REQUIRE(dbusType.asString() == ss.str());
+        REQUIRE(static_cast<double>(dbusType) == value);
     }
 
 } // namespace test

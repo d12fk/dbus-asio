@@ -13,16 +13,15 @@ namespace test {
         const std::string& stream, uint32_t v1,
         uint32_t v2)
     {
-        Type::Struct dbusStruct;
-        dbusStruct.setSignature("(uu)");
+        Type::Struct dbusStruct("(uu)");
 
         MessageIStream istream((uint8_t*)stream.data(), stream.size(),
             byteOrder != __LITTLE_ENDIAN);
         dbusStruct.unmarshall(istream);
 
-        REQUIRE(dbusStruct.getEntries() == 2);
-        REQUIRE(Type::asString(dbusStruct[0]) == std::to_string(v1));
-        REQUIRE(Type::asString(dbusStruct[1]) == std::to_string(v2));
+        REQUIRE(dbusStruct.size() == 2);
+        REQUIRE(Type::asUint32(dbusStruct[0]) == v1);
+        REQUIRE(Type::asUint32(dbusStruct[1]) == v2);
     }
 
     void TestUnmarshallMessageIStream(unsigned byteOrder, uint32_t v1,

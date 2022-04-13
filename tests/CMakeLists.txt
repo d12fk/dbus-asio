@@ -27,11 +27,6 @@ target_include_directories(dbus_messageistream_unittest PRIVATE ../extern)
 target_link_libraries(dbus_messageistream_unittest LINK_PRIVATE dbus-asio)
 add_test(NAME run_dbus_messageistream_unittest COMMAND dbus_messageistream_unittest)
 
-add_executable(dbus_validation_unittest dbus_validation_unittest.cpp test_main.cpp)
-target_include_directories(dbus_validation_unittest PRIVATE ../extern)
-target_link_libraries(dbus_validation_unittest LINK_PRIVATE dbus-asio)
-add_test(NAME run_dbus_validation_unittest COMMAND dbus_validation_unittest)
-
 add_executable(dbus_type_array_unittest dbus_type_array_unittest.cpp test_main.cpp)
 target_include_directories(dbus_type_array_unittest PRIVATE ../extern)
 target_link_libraries(dbus_type_array_unittest LINK_PRIVATE dbus-asio)
