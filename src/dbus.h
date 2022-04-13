@@ -54,8 +54,8 @@
 #include "dbus_message.h"
 #include "dbus_messageostream.h"
 #include "dbus_messageprotocol.h"
-#include "dbus_native.h"
 #include "dbus_transport.h"
+#include "dbus_connection.h"
 
 // Introspective library
 #include "dbus_introspectable.h"

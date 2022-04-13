@@ -8,6 +8,7 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
 set(HEADER_FILES
 	src/dbus_asio.h
 	src/dbus_auth.h
+	src/dbus_connection.h
 	src/dbus_error.h
 	src/dbus.h
 	src/dbus_introspectable.h
@@ -17,7 +18,6 @@ set(HEADER_FILES
 	src/dbus_messageprotocol.h
 	src/dbus_messageostream.h
 	src/dbus_messageistream.h
-	src/dbus_native.h
 	src/dbus_names.h
 	src/dbus_octetbuffer.h
 	src/dbus_platform.h
@@ -52,8 +52,6 @@ add_library(dbus-asio SHARED
 	src/dbus_message.cpp
 	src/dbus_messageistream.cpp
 	src/dbus_messageprotocol.cpp
-	src/dbus_native.cpp
-	src/dbus_native_messages.cpp
 	src/dbus_names.cpp
 	src/dbus_octetbuffer.cpp
 	src/dbus_platform.cpp
