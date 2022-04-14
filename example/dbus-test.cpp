@@ -26,236 +26,279 @@ https://lists.freedesktop.org/archives/dbus/2012-November/015341.html
 */
 
 #include "dbus.h"
+#include <iostream>
+
+void handleNameAcquired(DBus::Connection::Ptr dbus)
+{
+    dbus->receiveSignal(
+        "org.freedesktop.DBus.NameAcquired",
+        [dbus](const DBus::Message::Signal& signal) {
+            if (!signal) return;
+            // Knowing the type is 's' we can be safe in assuming asString will work
+            const auto name = DBus::Type::asString(signal.getParameter(0));
+            std::cout << "RCV signal : NameAcquired : " << name << std::endl;
+            handleNameAcquired(dbus);
+        });
+}
+
+void handleNameOwnerChanged(DBus::Connection::Ptr dbus)
+{
+    dbus->receiveSignal(
+        "org.freedesktop.DBus.NameOwnerChanged",
+        [dbus](const DBus::Message::Signal& signal) {
+            if (!signal) return;
+            const auto name = DBus::Type::asString(signal.getParameter(0));
+            std::cout << "RCV signal : NameOwnerChanged : " << name << std::endl;
+            handleNameOwnerChanged(dbus);
+        });
+}
+
+void servePropertiesGet(DBus::Connection::Ptr dbus)
+{
+    dbus->receiveMethodCall(
+        "org.freedesktop.DBus.Properties.Get",
+        [dbus](const DBus::Message::MethodCall& call) {
+            if (!call) return;
+            const auto interface = call.getParameter(0).asString();
+            const auto property = call.getParameter(1).asString();
+
+            auto errorHandler = [](const DBus::Error& error){
+                if (error)
+                    std::cerr << "error while sending Get reply:" << error.message << std::endl;
+            };
+
+            if (property == "Answer") {
+                DBus::Message::MethodReturn reply(call.getSender(), call.getSerial());
+                reply.addParameter(DBus::Type::Uint16(42));
+                dbus->sendMethodReturn(reply, errorHandler);
+            } else if (property == "Poetry") {
+                DBus::Message::MethodReturn reply(call.getSender(), call.getSerial());
+                reply.addParameter(DBus::Type::String("The dead swans lay in the stagnant pool."));
+                dbus->sendMethodReturn(reply, errorHandler);
+            } else {
+                DBus::Message::Error err(call.getSender(), call.getSerial(),
+                    "biz.brightsign.Error.InvalidParameters",
+                    "Requested property is unknown: " + property);
+                dbus->sendError(err, errorHandler);
+            }
+            servePropertiesGet(dbus);
+        });
+}
+
+void servePropertiesGetAll(DBus::Connection::Ptr dbus)
+{
+    // TODO: finish org.freedesktop.DBus.Properties.GetAll to return the correct
+    // data as name:value pair looks wrong, but it doesn't crash. Whereas the a(sv)
+    // is right, but causes the sender to terminate the connection
+    dbus->receiveMethodCall(
+        "org.freedesktop.DBus.Properties.GetAll",
+        [dbus](const DBus::Message::MethodCall& method) {
+            if (!method) return;
+            printf("GetAll\nCALLBACK METHOD : serial %.4x \n", method.getSerial());
+            printf("CALLBACK METHOD : sender %s \n",
+                method.getSender().c_str());
+            printf("CALLBACK METHOD : destination %s \n",
+                method.getDestination().c_str());
+            printf("CALLBACK METHOD : serial %d \n", method.getSerial());
+
+            DBus::Type::Struct p1;
+            p1.add(DBus::Type::String("Answer"));
+            p1.add(DBus::Type::Variant(DBus::Type::Uint16(42)));
+
+            DBus::Type::Struct p2;
+            p2.add(DBus::Type::String("Poetry"));
+            p2.add(DBus::Type::Variant(DBus::Type::String("The dead swans lay in the stagnant pool.")));
+
+            DBus::Type::Array properties;
+            properties.add(p1);
+
+            DBus::Message::MethodReturn reply(method.getSender(), method.getSerial());
+            reply.addParameter(properties);
+            dbus->sendMethodReturn(reply,
+                [](const DBus::Error& error){
+                    if (error)
+                        std::cerr << "error while sending GetAll reply:" << error.message << std::endl;
+                });
+            servePropertiesGetAll(dbus);
+        });
+}
+
+void serveIntrospect(DBus::Connection::Ptr dbus)
+{
+    static std::string xml;
+    if (xml.empty())
+    {
+        DBus::Introspectable::Interface iface("biz.brightsign.TestInterface");
+        iface.addMethod(DBus::Introspectable::Method("Ping", "", "ss"));
+        iface.addMethod(DBus::Introspectable::Method("Echo2", "ss", "s"));
+        iface.addProperty(DBus::Introspectable::Property("Answer", "q"));
+        iface.addProperty(DBus::Introspectable::Property("Poetry", "s"));
+        iface.addSignal(DBus::Introspectable::Signal("BroadcastStuff", "s"));
+
+        DBus::Introspectable::Introspection introspection;
+        introspection.addInterface(iface);
+        xml = introspection.serialize();
+    }
+
+    dbus->receiveMethodCall(
+        "org.freedesktop.DBus.Introspectable.Introspect",
+        [dbus](const DBus::Message::MethodCall& call) {
+            if (!call) return;
+            DBus::Message::MethodReturn reply(call.getSender(), call.getSerial());
+            reply.addParameter(DBus::Type::String(xml));
+            dbus->sendMethodReturn(reply,
+                [](const DBus::Error& error){
+                    if (error)
+                        std::cerr << "error serving introspection: "
+                                  << error.message << std::endl;
+                });
+            serveIntrospect(dbus);
+        });
+}
+
+void servePing(DBus::Connection::Ptr dbus)
+{
+    dbus->receiveMethodCall(
+        "biz.brightsign.TestInterface.Ping",
+        [dbus](const DBus::Message::MethodCall& call) {
+            if (!call) return;
+            DBus::Message::MethodReturn reply(call.getSender(), call.getSerial());
+            reply.addParameter(DBus::Type::String("Ping??"));
+            reply.addParameter(DBus::Type::String("Pong!!"));
+            dbus->sendMethodReturn(reply,
+                [](const DBus::Error& error) {
+                    if (error)
+                        std::cerr << "error while sending Ping reply:" << error.message << std::endl;
+                });
+            servePing(dbus);
+        });
+}
+
+void serveEcho2(DBus::Connection::Ptr dbus)
+{
+    dbus->receiveMethodCall(
+        "biz.brightsign.TestInterface.Echo2",
+        [dbus](const DBus::Message::MethodCall& call) {
+            if (!call) return;
+            if (call.isReplyExpected()) {
+                auto errorHandler = [](const DBus::Error& error) {
+                    if (error)
+                        std::cerr << "error while sending Echo2 reply: " << error.message << std::endl;
+                };
+                if (call.getParameterCount() != 2) {
+                    DBus::Message::Error err(call.getSender(), call.getSerial(),
+                        "biz.brightsign.Error.InvalidParameters",
+                        "This needs 2 params.");
+                    dbus->sendError(err, errorHandler);
+                } else {
+                    const auto input1(call.getParameter(0).asString());
+                    const auto input2(call.getParameter(1).asString());
+                    DBus::Message::MethodReturn reply(call.getSender(), call.getSerial());
+                    reply.addParameter(DBus::Type::String("Echo of : " + input1 + " and " + input2));
+                    dbus->sendMethodReturn(reply, errorHandler);
+                }
+            }
+            serveEcho2(dbus);
+        });
+}
+
+void serveOpenFile(DBus::Connection::Ptr dbus)
+{
+    dbus->receiveMethodCall(
+        "biz.brightsign.TestInterface.OpenFile",
+        [dbus](const DBus::Message::MethodCall& call) {
+            if (!call) return;
+            if (call.isReplyExpected()) {
+                auto errorHandler = [](const DBus::Error& error) {
+                    if (error)
+                        std::cerr << "error while sending OpenFile reply: " << error.message << std::endl;
+                };
+                if (call.getParameterCount() != 1) {
+                    DBus::Message::Error err(call.getSender(), call.getSerial(),
+                        "biz.brightsign.Error.InvalidParameters",
+                        "This needs 2 params.");
+                    dbus->sendError(err, errorHandler);
+                } else {
+                    const auto input1 = DBus::Type::asString(call.getParameter(0));
+                    DBus::Message::MethodReturn reply(call.getSender(), call.getSerial());
+                    int fd = 0;
+                    reply.addParameter(DBus::Type::UnixFd(fd));
+                    dbus->sendMethodReturn(reply, errorHandler);
+                }
+            }
+            serveOpenFile(dbus);
+        });
+}
 
 void test1()
 {
-    DBus::Log::setLevel(DBus::Log::WARNING);
+    DBus::Log::setLevel(DBus::Log::TRACE);
 
     DBus::Log::write(DBus::Log::INFO, "System bus: %s\n",
         DBus::Platform::getSystemBus().c_str());
     DBus::Log::write(DBus::Log::INFO, "Session bus: %s\n",
         DBus::Platform::getSessionBus().c_str());
-    // DBus::Native native(DBus::Platform::getSystemBus());
-    DBus::Native native(DBus::Platform::getSessionBus());
-    sleep(1);
 
-    native.BeginAuth(
-        DBus::AuthenticationProtocol::AUTH_BASIC); // AUTH_BASIC or
-    // AUTH_NEGOTIATE_UNIX_FD
+    DBus::asio::io_context ioc;
+    DBus::Connection::Ptr dbus = DBus::Connection::create(ioc);
+    if (!dbus)
+        return;
 
-    // org.bluez.obex  - use / and objectmanager
+    dbus->connect(
+        DBus::Platform::getSessionBus(),
+        DBus::AuthenticationProtocol::create(),
+        [dbus](const DBus::Error& error, const std::string&, const std::string&) {
+            if (error)
+                return;
 
-#if 1
-    DBus::Introspectable::Introspection introspection;
-    DBus::Introspectable::Interface iface("biz.brightsign.TestInterface");
-    iface.addMethod(DBus::Introspectable::Method("Ping", "", "ss"));
-    iface.addMethod(DBus::Introspectable::Method("Echo2", "ss", "s"));
-    iface.addProperty(DBus::Introspectable::Property("p1", "s"));
-    iface.addProperty(DBus::Introspectable::Property("p2", "s"));
-    iface.addSignal(DBus::Introspectable::Signal("BroadcastStuff", "s"));
+            handleNameAcquired(dbus);
+            handleNameOwnerChanged(dbus);
 
-    introspection.addInterface(iface);
+            servePropertiesGetAll(dbus);
+            servePropertiesGet(dbus);
+            serveIntrospect(dbus);
 
-    std::string xml_introspection(introspection.serialize());
-#endif
+            servePing(dbus);
+            serveEcho2(dbus);
+            serveOpenFile(dbus);
 
-    // Also, support methods etc
-    // native.SendAuthListMethods();
+            dbus->requestName(
+                "test.steev", DBus::RequestNameFlags::None,
+                [dbus](const DBus::Error& error, const DBus::Message::MethodReturn& msg) {
+                    if (error)
+                        return dbus->disconnect();
 
-    // Hello() is necessary before any communications take place
-    printf("Send hello message...\n");
+                    uint32_t result = DBus::Type::asUint32(msg.getParameter(0));
+                    if (result != DBus::RequestNameReply::PrimaryOwner)
+                        std::cerr << "Not Primary Owner" << std::endl;
 
-    DBus::Log::setLevel(DBus::Log::TRACE);
-    native.registerSignalHandler(
-        "org.freedesktop.DBus.NameAcquired",
-        [&](const DBus::Message::Signal& signal) {
-            // Knowing the type is 's' we can be safe in assuming asString will work
-            std::string signalName = DBus::Type::asString(signal.getParameter(0));
-            printf("RCV signalName : NameAcquired : %s\n", signalName.c_str());
+                    std::cout << "Try and call ourselves..." << std::endl;
+                    dbus->sendMethodCall(
+                        { "test.steev",
+                          { "/", "biz.brightsign.TestInterface", "Echo2" }, {"one", "two"} },
+                        [](const DBus::Error& error, const DBus::Message::MethodReturn& reply) {
+                            const auto result = reply.getParameter(0).asString();
+                            std::cout << "REPLY FROM Echo2 : " << result << std::endl;
+                        });
+
+                    dbus->sendMethodCall(
+                        { "test.steev",
+                          { "/", "biz.brightsign.TestInterface", "OpenFile" }, {"/etc/passwd"} },
+                        [dbus](const DBus::Error& error, const DBus::Message::MethodReturn& reply) {
+                            const auto result = DBus::Type::asUnixFd(reply.getParameter(0));
+                            std::cout << "REPLY FROM OpenFile : " << result << std::endl;
+                            dbus->disconnect();
+
+                            std::cout << '\n' << dbus->getStats();
+                        });
+                });
         });
 
-    native.registerSignalHandler(
-        "org.freedesktop.DBus.NameOwnerChanged",
-        [&](const DBus::Message::Signal& signal) {
-            std::string signalName = DBus::Type::asString(signal.getParameter(0));
-            printf("RCV signalName : NameOwnerChanged : %s\n", signalName.c_str());
-        });
-
-    native.callHello(
-        [](const DBus::Message::MethodReturn& msg) {
-            std::string signalName = DBus::Type::asString(msg.getParameter(0));
-            printf("REPLY FROM HELLO : This is our unique name : %s\n",
-                signalName.c_str());
-        },
-        [](const DBus::Message::Error& msg) {
-            printf("ERROR FROM HELLO : %s\n", msg.getMessage().c_str());
-        });
-    //	DBus::Log::setLevel(DBus::Log::WARNING);
-    // TODO: This should get removed, but _something_ i not buffering the method
-    // calls below
-    // TODO: Am I deadlocking?
-    // sleep(3);
-
-#if 0
-	DBus::Message::MethodCallIdentifier test_ping("/org/example/TestObject", "org.example.TestInterface", "Ping");
-	native.sendMethodCall(test_ping,
-	 	[] (const DBus::Message::MethodReturn &msg) {
-			printf("REPLY FROM ping : %s\n", DBus::Type::asString(msg.m_Body).c_str());
-	 });
-#endif
-
-    native.registerMethodCallHandler(
-        "org.freedesktop.DBus.Properties.Get",
-        [&](const DBus::Message::MethodCall& method) {
-            DBus::Message::MethodReturn result(method.getSerial());
-            // TODO: return Serial should be in ctor for error and return - and
-            // FIRST PARAMETER
-            std::string interface = DBus::Type::asString(method.getParameter(0));
-            std::string propertyName = DBus::Type::asString(method.getParameter(1));
-
-            // result.m_Parameters.add(DBus::Type::String("The result of " +
-            // interface + " of " + propertyName + " is 42. Always 42!"));
-            result.addParameter(DBus::Type::String("The result of " + interface + " of " + propertyName + " is 42. Always 42!"));
-
-            if (propertyName == "p1") {
-                native.sendMethodReturn(method.getHeaderSender(), result);
-            } else {
-                DBus::Message::Error err(method.getSerial(),
-                    "biz.brightsign.Error.InvalidParameters",
-                    "Parameter is not p1");
-                native.sendError(method.getHeaderSender(), err);
-            }
-        });
-
-#if 1
-    native.registerMethodCallHandler(
-        "org.freedesktop.DBus.Introspectable.Introspect",
-        [&](const DBus::Message::MethodCall& method) {
-            DBus::Message::MethodReturn result(method.getSerial());
-            result.addParameter(DBus::Type::String(xml_introspection));
-            native.sendMethodReturn(method.getHeaderSender(), result);
-        });
-#endif
-
-// TODO: finish org.freedesktop.DBus.Properties.GetAll to return the correct
-// data as name:value pair looks wrong, but it doesn't crash. Whereas the a(sv)
-// is right, but causes the sender to terminate the connection
-#if 1
-    // It is recommend you implement this method - even if you only return an
-    // empty string. Some apps (like d-feet) will wait for a reply, making them
-    // appear slow.
-    native.registerMethodCallHandler(
-        "org.freedesktop.DBus.Properties.GetAll",
-        [&](const DBus::Message::MethodCall& method) {
-            printf("GetAll\nCALLBACK METHOD : serial %.4x \n", method.getSerial());
-            printf("CALLBACK METHOD : sender %s \n",
-                method.getHeaderSender().c_str());
-            printf("CALLBACK METHOD : destination %s \n",
-                method.getHeaderDestination().c_str());
-            printf("CALLBACK METHOD : serial %d \n", method.getSerial());
-
-            DBus::Type::Array propertyList;
-
-            DBus::Type::Struct s1;
-            s1.add(DBus::Type::String("p1"));
-            s1.add(DBus::Type::Variant(DBus::Type::String("s")));
-
-            propertyList.add(s1);
-            // native.sendMethodReturn(method.getSerial(), header.destination,
-            // header.sender, propertyList);
-
-            // std::string result("p1:123,p2:44");
-            std::string result("");
-            DBus::Type::Generic body = DBus::Type::String(result);
-
-            // REM: The destination for the incoming message is us, the sender, in
-            // this context.
-
-            // TODO
-            DBus::Message::MethodReturn result2(method.getSerial());
-            result2.addParameter(body);
-            native.sendMethodReturn(method.getHeaderSender(), result2);
-            //		native.sendMethodReturn(method.getSerial(),
-            //header.destination, header.sender, body);
-        });
-#endif
-
-#if 1
-    native.registerMethodCallHandler(
-        "biz.brightsign.TestInterface.Echo2",
-        [&](const DBus::Message::MethodCall& method) {
-            if (!method.isReplyExpected()) {
-                // NOP
-            } else if (method.getParameterCount() != 2) {
-                DBus::Message::Error err(method.getSerial(),
-                    "biz.brightsign.Error.InvalidParameters",
-                    "This needs 2 params.");
-                native.sendError(method.getHeaderSender(), err);
-
-            } else {
-                std::string input1(DBus::Type::asString(method.getParameter(0)));
-                std::string input2(DBus::Type::asString(method.getParameter(1)));
-                DBus::Type::Generic body = DBus::Type::String("Echo of : " + input1 + " and " + input2);
-                // TODO
-                DBus::Message::MethodReturn result(method.getSerial());
-                result.addParameter(body);
-                native.sendMethodReturn(method.getHeaderSender(), result);
-            }
-        });
-
-    native.registerMethodCallHandler(
-        "biz.brightsign.TestInterface.Ping",
-        [&](const DBus::Message::MethodCall& method) {
-            DBus::Type::Array propertyList;
-
-            propertyList.add(DBus::Type::DictEntry(DBus::Type::String("p1"),
-                DBus::Type::String("two")));
-
-            DBus::Message::MethodReturn result(method.getSerial());
-            result.addParameter(DBus::Type::String("pong!!"));
-            native.sendMethodReturn(method.getHeaderSender(), result);
-        });
-
-#endif
-
-    // Run a "server"
-    native.callRequestName(
-        "test.steev", 0,
-        [](const DBus::Message::MethodReturn& msg) {
-            uint32_t result = DBus::Type::asUint32(msg.getParameter(0));
-
-            if (result != DBus::Native::DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-                printf("Not Primary Owner\n");
-            }
-        },
-        [](const DBus::Message::Error& msg) {
-            printf("ERROR FROM callRequestName : %s\n", msg.getMessage().c_str());
-        });
-
-    printf("Try and call ourselves...\n");
-    DBus::Message::MethodCallParametersIn params;
-    params.add(std::string("one"));
-    params.add(std::string("two"));
-    DBus::Message::MethodCall concat(
-        DBus::Message::MethodCallIdentifier("/", "biz.brightsign.TestInterface",
-            "Echo2"),
-        params);
-    native.sendMethodCall(
-        "test.steev", concat,
-        [](const DBus::Message::MethodReturn& msg) {
-            std::string result = DBus::Type::asString(msg.getParameter(0));
-            printf("REPLY FROM echo2 : This is our id : %s\n", result.c_str());
-        },
-        [](const DBus::Message::Error& msg) {
-            printf("ERROR FROM echo2 : %s\n", msg.getMessage().c_str());
-        });
-
-    sleep(200);
+    ioc.run();
 }
 
-int main(int argc, const char* argv[])
+int main()
 {
     test1();
-
     return 0;
 }
