@@ -78,15 +78,6 @@ add_library(dbus-asio SHARED
 	src/dbus_utils.cpp
 )
 
-# DBUS DEPENDENCIES
-find_package(Boost COMPONENTS chrono system thread REQUIRED)
-include_directories(${Boost_INCLUDE_DIR})
-set (PRIVATE_LIBS ${Boost_LIBRARIES})
-link_directories(${Boost_LIBRARY_DIRS})
-
-# PTHREAD DEPENDENCIES
-find_package (Threads REQUIRED)
-
 # ASIO
 option(DBUS_ASIO_STANDALONE "Use ASIO standalone library (non-boost)" OFF)
 if(DBUS_ASIO_STANDALONE)
@@ -102,28 +93,21 @@ else()
     set(DBUS_ERROR_CODE_NAMESPACE "::boost::system")
     set(DBUS_ERROR_CODE_ERRC "::boost::system::errc::errc_t")
     set(DBUS_MAKE_ERROR_CODE "::boost::asio::error::make_error_code")
+
+    find_package (Threads REQUIRED)
+    target_link_libraries(dbus-asio Threads::Threads)
 endif()
 set(DBUS_ASIO_H ${CMAKE_CURRENT_SOURCE_DIR}/src/dbus_asio.h)
 configure_file(${DBUS_ASIO_H}.in ${DBUS_ASIO_H})
 unset(DBUS_ASIO_H)
-
-target_link_libraries (dbus-asio ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 set_target_properties(dbus-asio PROPERTIES
 	VERSION ${PROJECT_VERSION}
 	SOVERSION 1
 	PUBLIC_HEADER "${HEADER_FILES}")
 
-foreach(LIB ${PRIVATE_LIBS})
-	get_filename_component(BARE_LIB ${LIB} NAME)
-	string(REGEX REPLACE ".so$" "" BARE_LIB "${BARE_LIB}")
-	string(REGEX REPLACE "^lib" "-l" BARE_LIB "${BARE_LIB}")
-	set(PLATFORM_LIBS "${PLATFORM_LIBS} ${BARE_LIB}")
-endforeach()
+set(PLATFORM_LIBS "-ldbus-asio")
 
-set(PLATFORM_LIBS "${PLATFORM_LIBS} -ldbus-asio")
-
-message(${PLATFORM_LIBS})
 configure_file(dbus-asio.pc.in dbus-asio.pc @ONLY)
 
 target_include_directories(dbus-asio PUBLIC src)
