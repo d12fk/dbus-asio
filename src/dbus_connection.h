@@ -31,7 +31,7 @@ static constexpr char const *Name = "org.freedesktop.DBus";
 static constexpr char const *Object = "/org/freedesktop/DBus";
 static constexpr char const *Interface = "org.freedesktop.DBus";
 
-enum RequestNameFlags {
+enum RequestNameFlag {
     None = 0,
     AllowReplacement = 1,
     ReplaceExisting = 2,

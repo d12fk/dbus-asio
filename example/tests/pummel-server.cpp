@@ -102,7 +102,7 @@ int main()
             serveConcat(dbus);
 
             dbus->requestName(
-                "biz.brightsign", DBus::RequestNameFlags::None,
+                "biz.brightsign", DBus::RequestNameFlag::None,
                 [dbus](const DBus::Error& error, const DBus::Message::MethodReturn& reply) {
                     if (error) {
                         std::cerr << "RequestName error: " << error.message << std::endl;

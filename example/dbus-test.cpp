@@ -263,7 +263,7 @@ void test1()
             serveOpenFile(dbus);
 
             dbus->requestName(
-                "test.steev", DBus::RequestNameFlags::None,
+                "test.steev", DBus::RequestNameFlag::None,
                 [dbus](const DBus::Error& error, const DBus::Message::MethodReturn& msg) {
                     if (error)
                         return dbus->disconnect();
