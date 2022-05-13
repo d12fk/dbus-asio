@@ -315,16 +315,6 @@ DBus::Message::Parameters::toString(const std::string& prefix) const
     return oss.str();
 }
 
-DBus::Message::Parameters::Parameters(
-    const DBus::Type::Any& v)
-    : m_parameters({v})
-{}
-
-DBus::Message::Parameters::Parameters(
-    const DBus::Type::Any& v1, const DBus::Type::Any& v2)
-    : m_parameters({v1, v2})
-{}
-
 void DBus::Message::Parameters::add(const DBus::Type::Any& value)
 {
     m_parameters.push_back(value);

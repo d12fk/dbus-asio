@@ -192,8 +192,16 @@ public:
         // inline, with Parameters("param") etc. Everyone else will need
         // to use a temporary variable and add()
         Parameters() = default;
-        Parameters(const DBus::Type::Any& v);
-        Parameters(const DBus::Type::Any& v1, const DBus::Type::Any& v2);
+        Parameters(Parameters&&) = default;
+        Parameters(const Parameters&) = default;
+
+        template<typename... Param>
+        Parameters(const Param&... param)
+            : m_parameters({ DBus::Type::Any(param)... })
+        {}
+
+        Parameters& operator=(Parameters&&) = default;
+        Parameters& operator=(const Parameters&) = default;
 
         void add(const DBus::Type::Any& value);
 
