@@ -244,9 +244,7 @@ void test1()
     if (!dbus)
         return;
 
-    dbus->connect(
-        DBus::Platform::getSessionBus(),
-        DBus::AuthenticationProtocol::create(),
+    dbus->connectSessionBus(
         [dbus](const DBus::Error& error, const std::string&, const std::string&) {
             if (error)
                 return;

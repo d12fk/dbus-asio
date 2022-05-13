@@ -54,6 +54,11 @@ public:
             m_socket.close();
     }
 
+    bool connected()
+    {
+        return m_socket.is_open();
+    }
+
     template<typename MutableBuffer, typename Handler>
     void asyncPeek(const MutableBuffer& buffer, Handler&& handler)
     {

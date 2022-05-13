@@ -65,6 +65,29 @@ public:
     }
 
     template<typename CompletionToken>
+    auto connectSystemBus(CompletionToken&& token)
+    {
+        return connect(Platform::getSystemBus(), std::move(token));
+    }
+
+    template<typename CompletionToken>
+    auto connectSessionBus(CompletionToken&& token)
+    {
+        return connect(Platform::getSessionBus(), std::move(token));
+    }
+
+    template<typename CompletionToken>
+    auto connect(
+        const std::string& busPath,
+        CompletionToken&& token)
+    {
+        return connect(
+            busPath,
+            AuthenticationProtocol::create(),
+            std::move(token));
+    }
+
+    template<typename CompletionToken>
     auto connect(
         const std::string& busPath,
         AuthenticationProtocol::Ptr authProto,
@@ -111,6 +134,11 @@ public:
     {
         m_nextSerial = 1;
         m_msgProto->stop();
+    }
+
+    bool connected()
+    {
+        return m_transport->connected();
     }
 
     template<typename CompletionToken>
