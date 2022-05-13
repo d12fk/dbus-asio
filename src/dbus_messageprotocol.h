@@ -192,6 +192,17 @@ public:
             }, token, signal);
     }
 
+    bool cancelReceiveSignal(const std::string& signal)
+    {
+        // Invoke handler for this exact signal
+        auto it = m_signalHandlers.find(signal);
+        if (it != m_signalHandlers.end()) {
+            m_signalHandlers.erase(it);
+            return true;
+        }
+        return false;
+    }
+
     template<typename CompletionToken>
     auto receiveError(CompletionToken&& token)
     {

@@ -195,6 +195,11 @@ public:
             signal, std::forward<CompletionToken>(token));
     }
 
+    auto cancelReceiveSignal(const std::string& signal)
+    {
+        return m_msgProto->cancelReceiveSignal(signal);
+    }
+
     template<typename CompletionToken>
     auto receiveError(
         CompletionToken&& token)
