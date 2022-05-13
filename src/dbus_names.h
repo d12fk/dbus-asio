@@ -30,7 +30,8 @@ namespace DBus {
     class Name {
     public:
         static constexpr std::size_t MaximumSize = 255;
-        operator std::string() const;
+        operator const char*() const;
+        explicit operator bool() const;
 
     protected:
         enum Type {
@@ -42,12 +43,11 @@ namespace DBus {
     };
 
     struct BusName : public Name {
+        BusName() = default;
         BusName(BusName&&) = default;
         BusName(const BusName&) = default;
         BusName(const char* name);
         BusName(const std::string& name);
-    protected:
-        BusName() = default;
     };
 
     struct UniqueName : public BusName {
@@ -65,6 +65,7 @@ namespace DBus {
     };
 
     struct InterfaceName : public Name {
+        InterfaceName() = default;
         InterfaceName(InterfaceName&&) = default;
         InterfaceName(const InterfaceName&) = default;
         InterfaceName(const char* name);
@@ -93,6 +94,7 @@ namespace DBus {
     };
 
     struct ObjectPath : public Name {
+        ObjectPath() = default;
         ObjectPath(ObjectPath&&) = default;
         ObjectPath(const ObjectPath&) = default;
         ObjectPath(const char* path);

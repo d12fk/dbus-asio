@@ -27,9 +27,14 @@ static constexpr std::array<const char*, 7> nameStr = {
     "member name"
 };
 
-DBus::Name::operator std::string() const
+DBus::Name::operator const char*() const
 {
-    return m_name;
+    return m_name.c_str();
+}
+
+DBus::Name::operator bool() const
+{
+    return !m_name.empty();
 }
 
 // Restrictions that apply to names in general:

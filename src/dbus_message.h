@@ -34,6 +34,8 @@ struct MemberName;
 struct InterfaceName;
 class MessageOStream;
 
+using InvalidMessage = std::runtime_error;
+
 class Message {
 public:
     static constexpr std::size_t MaximumSize = 134217728; /*128 MiB*/

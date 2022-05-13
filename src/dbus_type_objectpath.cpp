@@ -34,5 +34,7 @@ DBus::Type::ObjectPath::ObjectPath(const DBus::ObjectPath& v)
 
 void DBus::Type::ObjectPath::marshall(MessageOStream& stream) const
 {
+    if (m_Value.empty())
+        throw InvalidObjectPath("Cannot marshall empty ObjectPath");
     Type::String::marshall(stream);
 }

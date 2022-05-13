@@ -20,8 +20,6 @@
 
 #include "dbus_type_string.h"
 
-#include <stdexcept>
-
 namespace DBus {
 
     struct ObjectPath;

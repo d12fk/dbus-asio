@@ -1,6 +1,6 @@
 #include "dbus_names.h"
 #include <catch2/catch.hpp>
-#include <iostream>
+#include <sstream>
 
 namespace DBus {
 namespace test {
@@ -231,6 +231,21 @@ TEST_CASE("ObjectPath Validation")
     REQUIRE_THROWS_WITH(ObjectPath("/foo/"),                "/foo/ ends with slash");
     REQUIRE_THROWS_WITH(ObjectPath("/foo!/bar"),            "/foo!/bar has invalid character");
     REQUIRE_THROWS_WITH(ObjectPath("/foo//bar"),            "/foo//bar has // sequence");
+}
+
+TEST_CASE("DBus::Name operators")
+{
+    REQUIRE(static_cast<bool>(BusName("a.b")));
+    REQUIRE(static_cast<bool>(InterfaceName("a.b")));
+    REQUIRE(static_cast<bool>(ObjectPath("/a/b")));
+
+    REQUIRE_FALSE(BusName());
+    REQUIRE_FALSE(InterfaceName());
+    REQUIRE_FALSE(ObjectPath());
+
+    std::ostringstream test;
+    test << UniqueName(":1.2");
+    REQUIRE(test.str() == ":1.2");
 }
 
 } // namespace test

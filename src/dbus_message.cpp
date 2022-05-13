@@ -39,6 +39,18 @@
 DBus::Message::Header::Fields::Fields(const Header& header)
     : DBus::Type::Array("a(yv)")
 {
+    // Check the required fields that could have been passed in empty
+    if (header.type != Message::Type::Signal && header.destination.empty())
+        throw InvalidMessage("Message without destination");
+    if (header.type == Message::Type::Signal) {
+        if (header.path.empty())
+            throw InvalidMessage("Signal without ObjectPath");
+        if (header.interface.empty())
+            throw InvalidMessage("Signal without Interface");
+    }
+    else if (header.type == Message::Type::MethodCall && header.path.empty())
+        throw InvalidMessage("MethodCall without ObjectPath");
+
     if (!header.destination.empty())
         add(Header::Field::Destination, header.destination);
     if (!header.path.empty())
