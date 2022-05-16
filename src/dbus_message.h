@@ -218,6 +218,8 @@ public:
     };
 
     Message() = default;
+    Message(const Message::Identifier& id,
+            const Message::Parameters& params = {});
     Message(const Header& header, OctetBuffer& body);
 
     explicit operator bool() const { return m_Header.type != Type::Invalid; }
@@ -271,7 +273,7 @@ public:
     MethodCall() = default;
     // This is for outgoing method calls
     MethodCall(
-        const BusName& destination, const Identifier& name,
+        const BusName& destination, const Identifier& id,
         const Parameters& params = Parameters(), uint32_t flags = 0);
     // This is for receiving method calls
     MethodCall(const Header& header, OctetBuffer& body);
@@ -285,7 +287,8 @@ class Message::MethodReturn : public Message {
 public:
     MethodReturn() = default;
     // This is for sending outgoing replies
-    MethodReturn(const BusName& destination, uint32_t replySerial);
+    MethodReturn(const BusName& destination, uint32_t replySerial,
+                 const Parameters& params = {});
     // This is for receiving method returns
     MethodReturn(const Header& header, OctetBuffer& body);
 };
@@ -307,9 +310,12 @@ class Message::Signal : public Message {
 public:
     Signal() = default;
     // This is for outgoing broadcast signals
-    Signal(const Identifier& name);
+    Signal(const Identifier& id,
+           const Parameters& params = {});
     // This is for outgoing unicast signals
-    Signal(const BusName& destination, const Identifier& name);
+    Signal(const BusName& destination,
+           const Identifier& id,
+           const Parameters& params = {});
     // This is for receiving signals
     Signal(const Header& header, OctetBuffer& body);
 };

@@ -325,6 +325,14 @@ void DBus::Message::Parameters::add(const DBus::Type::Any& value)
 //
 // Message
 //
+DBus::Message::Message(const Identifier& id, const Parameters& params)
+    : m_Parameters(params)
+{
+    m_Header.path = id.path;
+    m_Header.interface = id.interface;
+    m_Header.member = id.member;
+}
+
 DBus::Message::Message(const Header& header, OctetBuffer& body)
     : m_Header(header)
 {
@@ -399,9 +407,10 @@ DBus::Message::MethodCall::MethodCall(const Message::Header& header,
 
 DBus::Message::MethodCall::MethodCall(
     const BusName& destination,
-    const Identifier& name,
+    const Identifier& id,
     const Parameters& params,
     uint32_t flags)
+    : Message(id, params)
 {
 
     if (flags & Message::Flag::AllowInteractiveAuthorization) {
@@ -415,10 +424,6 @@ DBus::Message::MethodCall::MethodCall(
     m_Header.flags = flags;
     m_Header.type = Message::Type::MethodCall;
     m_Header.destination = destination;
-    m_Header.path = name.path;
-    m_Header.interface = name.interface;
-    m_Header.member = name.member;
-    m_Parameters = params;
 }
 
 
@@ -427,13 +432,14 @@ DBus::Message::MethodCall::MethodCall(
 // Message::MethodReturn
 //
 DBus::Message::MethodReturn::MethodReturn(
-    const BusName& destination,
-    uint32_t replySerial)
+    const BusName& destination, uint32_t replySerial,
+    const Message::Parameters& params)
 {
     m_Header.flags = Flag::NoReplyExpected;
     m_Header.type = Message::Type::MethodReturn;
     m_Header.destination = destination;
     m_Header.replySerial = replySerial;
+    m_Parameters = params;
 }
 
 DBus::Message::MethodReturn::MethodReturn(const Message::Header& header,
@@ -487,19 +493,19 @@ std::string DBus::Message::Error::getMessage() const
 // Message::Signal
 //
 DBus::Message::Signal::Signal(
-    const Message::Identifier& name)
+    const Message::Identifier& id,
+    const Message::Parameters& params)
+    : Message(id, params)
 {
     m_Header.flags = Flag::NoReplyExpected;
     m_Header.type = Message::Type::Signal;
-    m_Header.path = name.path;
-    m_Header.interface = name.interface;
-    m_Header.member = name.member;
 }
 
 DBus::Message::Signal::Signal(
     const BusName& destination,
-    const Message::Identifier& name)
-    : Signal(name)
+    const Message::Identifier& id,
+    const Message::Parameters& params)
+    : Signal(id, params)
 {
     m_Header.destination = destination;
 }
