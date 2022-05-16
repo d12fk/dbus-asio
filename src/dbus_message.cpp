@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,8 +16,7 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#include <boost/thread/recursive_mutex.hpp>
-
+#include "dbus_type_any.h"
 #include "dbus_type_array.h"
 #include "dbus_type_byte.h"
 #include "dbus_type_signature.h"
@@ -25,230 +25,494 @@
 #include "dbus_type_uint32.h"
 #include "dbus_type_variant.h"
 
+#include "dbus_log.h"
+#include "dbus_names.h"
 #include "dbus_message.h"
 #include "dbus_messageistream.h"
 #include "dbus_messageostream.h"
 
-uint32_t DBus::Message::Base::m_SerialCounter = 1;
-boost::recursive_mutex DBus::Message::Base::m_SerialCounterMutex;
+#include <sstream>
 
-DBus::Message::Base::Base(uint32_t serial)
+//
+// Message::Header::Fields
+//
+DBus::Message::Header::Fields::Fields(const Header& header)
+    : DBus::Type::Array("a(yv)")
 {
-    boost::recursive_mutex::scoped_lock guard(m_SerialCounterMutex);
-    m_Header.serial = serial ? serial : m_SerialCounter++;
+    // Check the required fields that could have been passed in empty
+    if (header.type != Message::Type::Signal && header.destination.empty())
+        throw InvalidMessage("Message without destination");
+    if (header.type == Message::Type::Signal) {
+        if (header.path.empty())
+            throw InvalidMessage("Signal without ObjectPath");
+        if (header.interface.empty())
+            throw InvalidMessage("Signal without Interface");
+    }
+    else if (header.type == Message::Type::MethodCall && header.path.empty())
+        throw InvalidMessage("MethodCall without ObjectPath");
+
+    if (!header.destination.empty())
+        add(Header::Field::Destination, header.destination);
+    if (!header.path.empty())
+        add(Header::Field::Path, DBus::Type::ObjectPath(header.path));
+    if (!header.interface.empty())
+        add(Header::Field::Interface, header.interface);
+    if (!header.member.empty())
+        add(Header::Field::Member, header.member);
+    if (!header.errorName.empty())
+        add(Header::Field::ErrorName, header.errorName);
+    if (header.replySerial != 0)
+        add(Header::Field::ReplySerial, header.replySerial);
+    if (!header.sender.empty())
+        add(Header::Field::Sender, header.sender);
+    if (!header.signature.empty())
+        add(Header::Field::Signature, header.signature);
+    if (header.unixFds > 0)
+        add(Header::Field::UnixFds, header.unixFds);
 }
 
-DBus::Message::Base::Base(const DBus::Type::Struct& header,
-    const std::string& body)
+std::size_t
+DBus::Message::Header::Fields::add(Field type, const DBus::Type::Any& value)
 {
+    DBus::Type::Struct field;
+    field.add(DBus::Type::Byte(type));
+    field.add(DBus::Type::Variant(value));
+    return DBus::Type::Array::add(field);
+}
+
+
+
+//
+// Message::Header
+//
+DBus::Message::Header::Header(OctetBuffer& message)
+{
+    size = getSize(message);
+    endianness = Message::endianness(message);
+    MessageIStream istream(message, swapRequired(endianness));
+
+    DBus::Type::Struct header("(yyyyuua(yv))");
+    header.unmarshall(istream);
+
     // Capture the basic parameters
-    bool isLittleEndian = Type::asByte(header[0]) == 'l' ? true : false;
-    m_Header.type = Type::asByte(header[1]);
-    m_Header.flags = Type::asByte(header[2]);
-    m_Header.serial = Type::asUint32(header[5]);
+    type = static_cast<Message::Type>(DBus::Type::asByte(header[1]));
+    flags = DBus::Type::asByte(header[2]);
+    bodySize = DBus::Type::asUint32(header[4]);
+    serial = DBus::Type::asUint32(header[5]);
 
-    std::string signature;
-    const DBus::Type::Array& fields = DBus::Type::refArray(header[6]);
-    for (auto it : fields.getContents()) {
-        const DBus::Type::Struct& headerField = DBus::Type::refStruct(it);
-        uint8_t type = Type::asByte(headerField[0]);
-        switch (type) {
-        case Header::HEADER_PATH:
-            m_Header.path = DBus::Type::asString(headerField[1]);
+    for (auto& elem : DBus::Type::refArray(header[6])) {
+        const DBus::Type::Struct& field = DBus::Type::refStruct(elem);
+        Header::Field name = static_cast<Header::Field>(DBus::Type::asByte(field[0]));
+        switch (name) {
+        case Header::Field::Path:
+            path = DBus::Type::asString(field[1]);
             break;
-        case Header::HEADER_INTERFACE:
-            m_Header.interface = DBus::Type::asString(headerField[1]);
+        case Header::Field::Interface:
+            interface = DBus::Type::asString(field[1]);
             break;
-        case Header::HEADER_MEMBER:
-            m_Header.member = DBus::Type::asString(headerField[1]);
+        case Header::Field::Member:
+            member = DBus::Type::asString(field[1]);
             break;
-        case Header::HEADER_DESTINATION:
-            m_Header.destination = DBus::Type::asString(headerField[1]);
+        case Header::Field::ErrorName:
+            errorName = DBus::Type::asString(field[1]);
             break;
-        case Header::HEADER_SENDER:
-            m_Header.sender = DBus::Type::asString(headerField[1]);
+        case Header::Field::ReplySerial:
+            replySerial = DBus::Type::asUint32(field[1]);
             break;
-        case Header::HEADER_SIGNATURE:
-            signature = DBus::Type::asString(headerField[1]);
+        case Header::Field::Destination:
+            destination = DBus::Type::asString(field[1]);
             break;
-        case Header::HEADER_REPLY_SERIAL:
-            m_Header.replySerial = DBus::Type::asUint32(headerField[1]);
+        case Header::Field::Sender:
+            sender = DBus::Type::asString(field[1]);
             break;
-
+        case Header::Field::Signature:
+            signature = DBus::Type::refSignature(field[1]);
+            break;
+        case Header::Field::UnixFds:
+            unixFds = DBus::Type::asUint32(field[1]);
+            break;
         default:
             break;
         }
     }
 
-    // Empty bodies have no parameters
-    if (body.size()) {
-        parseParameters(isLittleEndian, body, signature);
-    }
+    message.remove_prefix(size);
 }
 
-void DBus::Message::Base::parseParameters(bool isLittleEndian,
-    const std::string& bodydata,
-    const std::string& signature)
+void DBus::Message::Header::marshall(MessageOStream& stream)
 {
-    DBus::Type::Struct parameter_fields;
-
-    parameter_fields.setSignature("(" + signature + ")");
-
-    MessageIStream stream((uint8_t*)bodydata.data(), bodydata.size(),
-        isLittleEndian ? __BYTE_ORDER != __LITTLE_ENDIAN
-                       : __BYTE_ORDER != __BIG_ENDIAN);
-    parameter_fields.unmarshall(stream);
-
-    size_t count = parameter_fields.getEntries();
-    for (size_t i = 0; i < count; ++i) {
-        m_Parameters.add(parameter_fields[i]);
-    }
-}
-
-std::string
-DBus::Message::Base::marshallMessage(const DBus::Type::Array& array) const
-{
-    MessageOStream header;
-    MessageOStream body;
-
-    /*
-          The signature of the header is:
-
-                  "yyyyuua(yv)"
-
-          Written out more readably, this is:
-
-                  BYTE, BYTE, BYTE, BYTE, UINT32, UINT32, ARRAY of STRUCT of
-     (BYTE,VARIANT)
-  */
+    //  The signature of the header is:
+    //      "yyyyuua(yv)"
+    //
+    //  Written out more readably, this is:
+    //      BYTE, BYTE, BYTE, BYTE, UINT32, UINT32, ARRAY of STRUCT of (BYTE,VARIANT)
 
     // 1st BYTE
     // Endianness flag; ASCII 'l' for little-endian or ASCII 'B' for big-endian.
     // Both header and body are in this endianness.
-    header.writeByte(__BYTE_ORDER == __LITTLE_ENDIAN ? 'l' : 'B');
+    stream.writeByte(__BYTE_ORDER == __LITTLE_ENDIAN ? 'l' : 'B');
 
     // 2nd BYTE
     // Message type. Unknown types must be ignored. Currently-defined types are
     // described below.
-    header.writeByte(m_Header.type);
+    stream.writeByte(static_cast<uint8_t>(type));
 
     // 3rd BYTE
     // Bitwise OR of flags. Unknown flags must be ignored. Currently-defined flags
     // are described below.
-    header.writeByte(m_Header.flags);
+    stream.writeByte(flags);
 
     // 4th BYTE
     // Major protocol version of the sending application. If the major protocol
     // version of the receiving application does not match, the applications will
     // not be able to communicate and the D-Bus connection must be disconnected.
     // The major protocol version for this version of the specification is 1.
-    header.writeByte(1);
+    stream.writeByte(1);
 
     // 1st UINT32
     // Length in bytes of the message body, starting from the end of the header.
     // The header ends after its alignment padding to an 8-boundary.
-    m_Parameters.marshallData(body);
-
-    header.writeUint32(body.data.length());
+    stream.writeUint32(bodySize);
 
     // 2nd UINT32
     // The serial of this message, used as a cookie by the sender to identify the
     // reply corresponding to this request. This must not be zero.
-    header.writeUint32(m_Header.serial);
+    stream.writeUint32(serial);
 
-    // Header fields length
-    MessageOStream header_fields;
+    // ARRAY of STRUCT of(BYTE,VARIANT) i.e. the header fields
+    Fields headerFields(*this);
+    headerFields.marshall(stream);
 
-    // It appears, from studying the packet data, that the header field array is
-    // not marshalled with the length of the array data in bytes, as suggested in
-    // the spec. Presumably this is because the header fields size can be
-    // determined from the packet_size - body_size - standard_header_size
-    array.marshallContents(header_fields);
-    header.writeUint32((int32_t)header_fields.size());
-
-    // End of header preparation
-
-    // Both header & header_fields constitute the header, which must end of an 8
-    // boundary. (See the phrase: "The header ends after its alignment padding to
+    // Both header & header_fields constitute the header, which must end of an
+    // 8 byte boundary. (See the phrase: "The header ends after its alignment padding to
     // an 8-boundary.") Therefore we add the padding here.
-    MessageOStream packet;
-    packet.write(header);
-    packet.write(header_fields);
-
-    // The body is required to start on an 8-boundary, but not end on one.
-    packet.pad8();
-    packet.write(body);
-
-    return packet.data;
+    stream.pad8();
 }
 
+
+std::string
+DBus::Message::Header::toString(const std::string& prefix) const
+{
+    std::ostringstream oss;
+
+    oss << prefix << "Endianness: " << (endianness == Endian::Big ? "big" : "little") << '\n';
+    oss << prefix << "Type: " << typeString(type) << '\n';
+    oss << prefix << "Flags: " << flagString(flags) << '\n';
+    oss << prefix << "Version: 1" << '\n';
+    oss << prefix << "Body length: " << bodySize << '\n';
+    oss << prefix << "Serial: #" << serial << '\n';
+
+    if (replySerial)
+        oss << prefix << "Reply Serial: #" << replySerial << '\n';
+    if (!sender.empty())
+        oss << prefix << "Sender: " << sender << '\n';
+    if (!destination.empty())
+        oss << prefix << "Destination: " << destination << '\n';
+    if (!path.empty())
+        oss << prefix << "Path: " << path << '\n';
+    if (!interface.empty())
+        oss << prefix << "Interface: " << interface << '\n';
+    if (!member.empty())
+        oss << prefix << "Member: " << member << '\n';
+    if (!errorName.empty())
+        oss << prefix << "Error Name: " << errorName << '\n';
+    if (!signature.empty())
+        oss << prefix << "Signature: " << signature.asString() << '\n';
+    if (unixFds)
+        oss << prefix << "Unix FDs: " << unixFds << '\n';
+
+    return oss.str();
+}
+
+std::size_t
+DBus::Message::Header::getSize(const OctetBuffer& message)
+{
+    std::size_t size = Message::Header::MinimumSize;
+    if (message.size() < size)
+        return 0; // TODO: throw instead?
+
+    // Add size of the header fields array
+    const Endian endianness = Message::endianness(message);
+    size += correctEndianess(endianness, *(uint32_t*)(message.data() + 12));
+    // Add padding to an 8 byte boundary
+    size += (size % 8 == 0) ? 0 : 8 - (size % 8);
+
+    if (size > Message::Header::MaximumSize)
+        throw std::out_of_range("DBus message error: maximum header size exceeded");
+
+    return size;
+}
+
+std::size_t
+DBus::Message::Header::getMessageSize(const OctetBuffer& message)
+{
+    if (message.size() < Message::Header::MinimumSize)
+        return 0; // TODO: throw instead?
+
+    const Endian endianness = Message::endianness(message);
+    std::size_t body_size = correctEndianess(endianness, *(uint32_t*)(message.data() + 4));
+    std::size_t msg_size = getSize(message) + body_size;
+
+    if (msg_size > Message::MaximumSize)
+        throw std::out_of_range("DBus message error: maximum message size exceeded");
+
+    return msg_size;
+}
+
+
+
 //
-// Parameters
+// Message::Identifier
+//
+DBus::Message::Identifier::Identifier(const ObjectPath& path, const InterfaceName& interface,
+    const MemberName& member)
+    : path(path)
+    , interface(interface)
+    , member(member)
+{}
+
+
+
+//
+// Message::Parameters
 //
 std::string
-DBus::Message::MethodCallParameters::getMarshallingSignature() const
+DBus::Message::Parameters::getSignature() const
 {
     std::string signature;
-    for (auto it : m_Contents.m_TypeList) {
-        signature += DBus::Type::getMarshallingSignature(it);
+    for (const auto& type : m_parameters) {
+        signature += type.getSignature();
     }
     return signature;
 }
 
-void DBus::Message::MethodCallParameters::marshallData(
+void DBus::Message::Parameters::marshall(
     MessageOStream& stream) const
 {
-    for (auto it : m_Contents.m_TypeList) {
-        DBus::Type::marshallData(it, stream);
+    for (const auto& type : m_parameters) {
+        type.marshall(stream);
     }
 }
 
-size_t DBus::Message::MethodCallParameters::getParameterCount() const
+size_t DBus::Message::Parameters::getParameterCount() const
 {
-    return m_Contents.m_TypeList.size();
+    return m_parameters.size();
 }
 
-const DBus::Type::Generic&
-DBus::Message::MethodCallParameters::getParameter(size_t idx) const
+const DBus::Type::Any&
+DBus::Message::Parameters::getParameter(size_t idx) const
 {
-    return m_Contents.m_TypeList[idx];
+    return m_parameters[idx];
 }
 
-DBus::Message::MethodCallParametersIn::MethodCallParametersIn(
-    const Type::Generic& v)
+std::string
+DBus::Message::Parameters::toString(const std::string& prefix) const
 {
-    add(v);
+    std::ostringstream oss;
+    for (const auto& param : m_parameters) {
+        oss << prefix << param.toString(prefix);
+    }
+    return oss.str();
 }
 
-DBus::Message::MethodCallParametersIn::MethodCallParametersIn(
-    const std::string& v)
+void DBus::Message::Parameters::add(const DBus::Type::Any& value)
 {
-    add(v);
+    m_parameters.push_back(value);
 }
 
-DBus::Message::MethodCallParametersIn::MethodCallParametersIn(
-    const std::string& v1, uint32_t v2)
+
+
+//
+// Message
+//
+DBus::Message::Message(const Identifier& id, const Parameters& params)
+    : m_Parameters(params)
 {
-    add(v1);
-    add(v2);
+    m_Header.path = id.path;
+    m_Header.interface = id.interface;
+    m_Header.member = id.member;
 }
 
-void DBus::Message::MethodCallParametersIn::add(const Type::Generic& value)
+DBus::Message::Message(const Header& header, OctetBuffer& body)
+    : m_Header(header)
 {
-    m_Contents.m_TypeList.push_back(value);
+    // Empty bodies have no parameters
+    if (body.size()) {
+        unmarshallBody(header.endianness, header.signature, body);
+    }
+    if (Log::isActive(Log::TRACE)) {
+        std::string prefix = "    ";
+        Log::write(Log::TRACE, "DBus :: Message : Header :\n%s",
+            header.toString(prefix).c_str());
+        if (m_Header.bodySize)
+            Log::write(Log::TRACE, "DBus :: Message : Data :\n%s\n",
+                m_Parameters.toString(prefix).c_str());
+    }
 }
 
-void DBus::Message::MethodCallParametersIn::add(uint8_t value)
+void DBus::Message::unmarshallBody(
+    Endian endianness,
+    const DBus::Type::Signature& signature,
+    OctetBuffer& body)
 {
-    add(DBus::Type::Byte(value));
+    MessageIStream stream(body, swapRequired(endianness));
+    DBus::Type::Struct parameter_fields(signature);
+    parameter_fields.unmarshall(stream);
+
+    size_t count = parameter_fields.size();
+    for (size_t i = 0; i < count; ++i) {
+        m_Parameters.add(parameter_fields[i]);
+    }
 }
 
-void DBus::Message::MethodCallParametersIn::add(uint32_t value)
+DBus::MessageOStream
+DBus::Message::marshall(std::uint32_t serial) const
 {
-    add(DBus::Type::Uint32(value));
+    MessageOStream body;
+    m_Parameters.marshall(body);
+
+    Header header = m_Header;
+    MessageOStream headerData;
+    header.serial = serial;
+    header.signature = m_Parameters.getSignature();
+    header.bodySize = body.data.size();
+    header.unixFds = body.fds.size();
+    header.marshall(headerData);
+
+    MessageOStream packet;
+    packet.write(headerData);
+    packet.write(body);
+
+    if (Log::isActive(Log::TRACE)) {
+        std::string prefix = "    ";
+        Log::write(Log::TRACE, "DBus :: Message : Header :\n%s",
+            header.toString(prefix).c_str());
+        if (header.bodySize)
+            Log::write(Log::TRACE, "DBus :: Message : Data :\n%s",
+                m_Parameters.toString(prefix).c_str());
+    }
+
+    return packet;
 }
 
-void DBus::Message::MethodCallParametersIn::add(const std::string& value)
+
+
+//
+// Message::MethodCall
+//
+DBus::Message::MethodCall::MethodCall(const Message::Header& header,
+    OctetBuffer& body)
+    : Message(header, body)
+{}
+
+DBus::Message::MethodCall::MethodCall(
+    const BusName& destination,
+    const Identifier& id,
+    const Parameters& params,
+    uint32_t flags)
+    : Message(id, params)
 {
-    add(DBus::Type::String(value));
+
+    if (flags & Message::Flag::AllowInteractiveAuthorization) {
+        DBus::Log::write(Log::ERROR,
+            "DBus :: ALLOW_INTERACTIVE_AUTHORIZATION is not supported.");
+        flags &= ~Message::Flag::AllowInteractiveAuthorization;
+    }
+    // Ignore any extraneous flags, also.
+    flags &= Message::Flag::_Mask;
+
+    m_Header.flags = flags;
+    m_Header.type = Message::Type::MethodCall;
+    m_Header.destination = destination;
 }
+
+
+
+//
+// Message::MethodReturn
+//
+DBus::Message::MethodReturn::MethodReturn(
+    const BusName& destination, uint32_t replySerial,
+    const Message::Parameters& params)
+{
+    m_Header.flags = Flag::NoReplyExpected;
+    m_Header.type = Message::Type::MethodReturn;
+    m_Header.destination = destination;
+    m_Header.replySerial = replySerial;
+    m_Parameters = params;
+}
+
+DBus::Message::MethodReturn::MethodReturn(const Message::Header& header,
+    OctetBuffer& body)
+    : Message(header, body)
+{}
+
+
+
+//
+// Message::Error
+//
+DBus::Message::Error::Error(
+    const BusName& destination,
+    uint32_t replySerial,
+    const ErrorName& name,
+    const std::string& message)
+{
+    m_Header.flags = Flag::NoReplyExpected;
+    m_Header.type = Message::Type::Error;
+    m_Header.destination = destination;
+    m_Header.replySerial = replySerial;
+    m_Header.errorName = name;
+    m_Parameters.add(message);
+}
+
+DBus::Message::Error::Error(const DBus::Message::Header& header,
+    OctetBuffer& body)
+    : Message(header, body)
+{
+    Log::write(Log::WARNING,
+        "DBus :: Error : received as reply to message #%d : %s\n",
+        getReplySerial(), getMessage().c_str());
+}
+
+std::string DBus::Message::Error::getName() const
+{
+    return getErrorName();
+}
+
+std::string DBus::Message::Error::getMessage() const
+{
+    if (m_Parameters.getParameterCount() == 0)
+        return "";
+    return DBus::Type::asString(m_Parameters.getParameter(0));
+}
+
+
+
+//
+// Message::Signal
+//
+DBus::Message::Signal::Signal(
+    const Message::Identifier& id,
+    const Message::Parameters& params)
+    : Message(id, params)
+{
+    m_Header.flags = Flag::NoReplyExpected;
+    m_Header.type = Message::Type::Signal;
+}
+
+DBus::Message::Signal::Signal(
+    const BusName& destination,
+    const Message::Identifier& id,
+    const Message::Parameters& params)
+    : Signal(id, params)
+{
+    m_Header.destination = destination;
+}
+
+DBus::Message::Signal::Signal(const Message::Header& header,
+    OctetBuffer& body)
+    : Message(header, body)
+{}
+
+

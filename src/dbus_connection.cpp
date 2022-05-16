@@ -1,5 +1,5 @@
 // This file is part of dbus-asio
-// Copyright 2018-2020 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,18 +15,21 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_VALIDATION_H
-#define DBUS_VALIDATION_H
+#include "dbus_connection.h"
 
-#include <stdexcept>
-#include <string>
+DBus::Connection::Ptr
+DBus::Connection::create(DBus::asio::io_context& ioContext)
+{
+    struct ShareableConnection : public Connection {
+        ShareableConnection(DBus::asio::io_context& ioContext)
+            : Connection(ioContext) {};
+    };
+    return std::make_shared<ShareableConnection>(ioContext);
+}
 
-namespace DBus {
-namespace Validation {
-    bool isValidBasicType(char type);
-    void throwOnInvalidBasicType(char type);
-    void throwOnInvalidBasicType(const std::string& type);
-} // namespace Validation
-} // namespace DBus
+DBus::Connection::Connection(DBus::asio::io_context& ioContext)
+    : m_ioContext(ioContext)
+    , m_transport(DBus::Transport::create(ioContext))
+{
+}
 
-#endif // DBUS_VALIDATION_H

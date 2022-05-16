@@ -32,8 +32,9 @@ namespace test {
         for (size_t i = 0; i < sizeof(T); i++) {
             memcpy(&data[i > 0 ? sizeof(T) : 0], &value, sizeof(T));
 
-            MessageIStream leStream(data.data(), data.size(), false);
-            MessageIStream beStream(data.data(), data.size(), true);
+            OctetBuffer buf(data.data(), data.size());
+            MessageIStream leStream(buf, false);
+            MessageIStream beStream(buf, true);
 
             std::string str;
             leStream.read(str, i);
@@ -52,7 +53,8 @@ namespace test {
     TEST_CASE("Read byte")
     {
         const uint8_t data = 34;
-        MessageIStream stream(&data, 1, false);
+        OctetBuffer buf(&data, 1);
+        MessageIStream stream(buf, false);
 
         REQUIRE(stream.read() == 34);
         CHECK_THROWS(stream.read());
@@ -61,8 +63,9 @@ namespace test {
     TEST_CASE("Read data")
     {
         const uint8_t data[4] = { 34, 35, 36, 37 };
+        OctetBuffer buf(data, sizeof(data));
         uint8_t readData[3];
-        MessageIStream stream(data, 4, false);
+        MessageIStream stream(buf, false);
 
         stream.read(readData, 3);
         REQUIRE(memcmp(data, readData, 3) == 0);
@@ -72,13 +75,14 @@ namespace test {
     TEST_CASE("Read double")
     {
         double value = 0.75483;
-        MessageIStream leStream((const uint8_t*)&value, sizeof(double), false);
+        OctetBuffer buf((const uint8_t*)&value, sizeof(double));
+        MessageIStream leStream(buf, false);
 
         uint64_t swapped_value;
         memcpy(&swapped_value, &value, sizeof(value));
         swapped_value = __bswap_64(swapped_value);
-        MessageIStream beStream((const uint8_t*)&swapped_value, sizeof(double),
-            true);
+        buf = {(const uint8_t*)&swapped_value, sizeof(double)};
+        MessageIStream beStream(buf, true);
 
         double readValue = 0.0;
         leStream.read(&readValue);
@@ -94,7 +98,8 @@ namespace test {
     TEST_CASE("Read string")
     {
         std::string value("Hello world");
-        MessageIStream stream((const uint8_t*)value.data(), value.size(), false);
+        OctetBuffer buf((const uint8_t*)value.data(), value.size());
+        MessageIStream stream(buf, false);
 
         std::string readValue = "Test";
         stream.read(readValue, value.size());
@@ -106,7 +111,8 @@ namespace test {
     TEST_CASE("Is empty")
     {
         std::string value("Hello world");
-        MessageIStream stream((const uint8_t*)value.data(), value.size(), false);
+        OctetBuffer buf((const uint8_t*)value.data(), value.size());
+        MessageIStream stream(buf, false);
 
         REQUIRE(stream.empty() == false);
 

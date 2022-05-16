@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -21,19 +22,9 @@
 #include <iomanip>
 #include <sstream>
 
-const std::string DBus::Type::Uint64::s_StaticTypeCode("t");
-
-DBus::Type::Uint64::Uint64()
-    : m_Value(0)
-{
-    setSignature(s_StaticTypeCode);
-}
-
-DBus::Type::Uint64::Uint64(uint64_t v)
+DBus::Type::Uint64::Uint64(const std::uint64_t v)
     : m_Value(v)
-{
-    setSignature(s_StaticTypeCode);
-}
+{}
 
 void DBus::Type::Uint64::marshall(MessageOStream& stream) const
 {
@@ -42,23 +33,21 @@ void DBus::Type::Uint64::marshall(MessageOStream& stream) const
 
 void DBus::Type::Uint64::unmarshall(MessageIStream& stream)
 {
-    stream.read<uint64_t>(&m_Value);
+    stream.read<std::uint64_t>(&m_Value);
 }
 
-std::string DBus::Type::Uint64::toString(const std::string& prefix) const
+std::string DBus::Type::Uint64::toString(const std::string&) const
 {
-    std::stringstream ss;
+    std::ostringstream oss;
 
-    ss << prefix << "Uint64 ";
-    ss << m_Value << " (0x" << std::hex << std::setfill('0') << std::setw(8)
-       << m_Value << ")\n";
+    oss << "Uint64 "
+        << m_Value << " (0x" << std::hex << std::setfill('0') << std::setw(16)
+        << m_Value << ")\n";
 
-    return ss.str();
+    return oss.str();
 }
 
 std::string DBus::Type::Uint64::asString() const
 {
-    std::stringstream ss;
-    ss << m_Value;
-    return ss.str();
+    return std::to_string(m_Value);
 }

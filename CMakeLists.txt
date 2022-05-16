@@ -6,7 +6,10 @@ set(CMAKE_CXX_VISIBILITY_PRESET protected)
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
 
 set(HEADER_FILES
+	src/dbus_asio.h
 	src/dbus_auth.h
+	src/dbus_connection.h
+	src/dbus_error.h
 	src/dbus.h
 	src/dbus_introspectable.h
 	src/dbus_log.h
@@ -15,17 +18,17 @@ set(HEADER_FILES
 	src/dbus_messageprotocol.h
 	src/dbus_messageostream.h
 	src/dbus_messageistream.h
-	src/dbus_native.h
+	src/dbus_names.h
 	src/dbus_octetbuffer.h
 	src/dbus_platform.h
 	src/dbus_transport.h
+	src/dbus_type.h
+	src/dbus_type_any.h
 	src/dbus_type_array.h
-	src/dbus_type_base.h
 	src/dbus_type_boolean.h
 	src/dbus_type_byte.h
 	src/dbus_type_dictentry.h
 	src/dbus_type_double.h
-	src/dbus_type.h
 	src/dbus_type_int16.h
 	src/dbus_type_int32.h
 	src/dbus_type_int64.h
@@ -36,9 +39,9 @@ set(HEADER_FILES
 	src/dbus_type_uint16.h
 	src/dbus_type_uint32.h
 	src/dbus_type_uint64.h
+	src/dbus_type_unixfd.h
 	src/dbus_type_variant.h
 	src/dbus_utils.h
-	src/dbus_validation.h
 )
 
 add_library(dbus-asio SHARED
@@ -47,22 +50,17 @@ add_library(dbus-asio SHARED
 	src/dbus_log.cpp
 	src/dbus_matchrule.cpp
 	src/dbus_message.cpp
-	src/dbus_message_error.cpp
 	src/dbus_messageistream.cpp
-	src/dbus_message_methodcall.cpp
-	src/dbus_message_methodreturn.cpp
 	src/dbus_messageprotocol.cpp
-	src/dbus_message_signal.cpp
-	src/dbus_native.cpp
-	src/dbus_native_messages.cpp
+	src/dbus_names.cpp
 	src/dbus_octetbuffer.cpp
 	src/dbus_platform.cpp
 	src/dbus_transport.cpp
+	src/dbus_type.cpp
+	src/dbus_type_any.cpp
 	src/dbus_type_array.cpp
-	src/dbus_type_base.cpp
 	src/dbus_type_boolean.cpp
 	src/dbus_type_byte.cpp
-	src/dbus_type.cpp
 	src/dbus_type_dictentry.cpp
 	src/dbus_type_double.cpp
 	src/dbus_type_int16.cpp
@@ -75,37 +73,41 @@ add_library(dbus-asio SHARED
 	src/dbus_type_uint16.cpp
 	src/dbus_type_uint32.cpp
 	src/dbus_type_uint64.cpp
+	src/dbus_type_unixfd.cpp
 	src/dbus_type_variant.cpp
 	src/dbus_utils.cpp
-	src/dbus_validation.cpp
 )
 
-# DBUS DEPENDENCIES
-find_package(Boost COMPONENTS chrono system thread REQUIRED)
-include_directories(${Boost_INCLUDE_DIR})
-set (PRIVATE_LIBS ${Boost_LIBRARIES})
-link_directories(${Boost_LIBRARY_DIRS})
+# ASIO
+option(DBUS_ASIO_STANDALONE "Use ASIO standalone library (non-boost)" OFF)
+if(DBUS_ASIO_STANDALONE)
+    add_compile_definitions(ASIO_STANDALONE)
+    set(DBUS_ASIO_INCLUDE "asio.hpp")
+    set(DBUS_ASIO_NAMESPACE "::asio")
+    set(DBUS_ERROR_CODE_NAMESPACE "::std")
+    set(DBUS_ERROR_CODE_ERRC "::std::errc")
+    set(DBUS_MAKE_ERROR_CODE "::std::make_error_code")
+else()
+    set(DBUS_ASIO_INCLUDE "boost/asio.hpp")
+    set(DBUS_ASIO_NAMESPACE "::boost::asio")
+    set(DBUS_ERROR_CODE_NAMESPACE "::boost::system")
+    set(DBUS_ERROR_CODE_ERRC "::boost::system::errc::errc_t")
+    set(DBUS_MAKE_ERROR_CODE "::boost::asio::error::make_error_code")
 
-# PTHREAD DEPENDENCIES
-find_package (Threads REQUIRED)
-
-target_link_libraries (dbus-asio ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+    find_package (Threads REQUIRED)
+    target_link_libraries(dbus-asio Threads::Threads)
+endif()
+set(DBUS_ASIO_H ${CMAKE_CURRENT_SOURCE_DIR}/src/dbus_asio.h)
+configure_file(${DBUS_ASIO_H}.in ${DBUS_ASIO_H})
+unset(DBUS_ASIO_H)
 
 set_target_properties(dbus-asio PROPERTIES
 	VERSION ${PROJECT_VERSION}
 	SOVERSION 1
 	PUBLIC_HEADER "${HEADER_FILES}")
 
-foreach(LIB ${PRIVATE_LIBS})
-	get_filename_component(BARE_LIB ${LIB} NAME)
-	string(REGEX REPLACE ".so$" "" BARE_LIB "${BARE_LIB}")
-	string(REGEX REPLACE "^lib" "-l" BARE_LIB "${BARE_LIB}")
-	set(PLATFORM_LIBS "${PLATFORM_LIBS} ${BARE_LIB}")
-endforeach()
+set(PLATFORM_LIBS "-ldbus-asio")
 
-set(PLATFORM_LIBS "${PLATFORM_LIBS} -ldbus-asio")
-
-message(${PLATFORM_LIBS})
 configure_file(dbus-asio.pc.in dbus-asio.pc @ONLY)
 
 target_include_directories(dbus-asio PUBLIC src)

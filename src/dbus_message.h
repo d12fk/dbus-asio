@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,243 +16,309 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_MESSAGE
-#define DBUS_MESSAGE
+#pragma once
 
-#include "dbus_type.h"
-#include <boost/thread/recursive_mutex.hpp>
+#include "dbus_type_array.h"
+#include "dbus_octetbuffer.h"
 #include <functional>
+#include <sstream>
+
+#include <byteswap.h>
 
 namespace DBus {
+
+struct BusName;
+struct ErrorName;
+struct ObjectPath;
+struct MemberName;
+struct InterfaceName;
 class MessageOStream;
 
-namespace Message {
+using InvalidMessage = std::runtime_error;
 
-    class MethodCallIdentifier {
-    public:
-        MethodCallIdentifier(const std::string& object, const std::string& interface,
-            const std::string& method)
-            : m_Object(object)
-            , m_Interface(interface)
-            , m_Method(method)
+class Message {
+public:
+    static constexpr std::size_t MaximumSize = 134217728; /*128 MiB*/
+
+    enum class Type {
+        Invalid = 0,
+        MethodCall = 1,
+        MethodReturn = 2,
+        Error = 3,
+        Signal = 4
+    };
+
+    static std::string typeString(Type t) {
+        switch (t) {
+            case Type::MethodCall:   return "MethodCall";
+            case Type::MethodReturn: return "MethodReturn";
+            case Type::Error:        return "Error";
+            case Type::Signal:       return "Signal";
+            default:                 return "INVALID";
+        }
+    }
+
+    class MethodCall;
+    class MethodReturn;
+    class Error;
+    class Signal;
+
+    enum Flag {
+        None = 0,
+        NoReplyExpected = 0x01,
+        NoAutoStart = 0x02,
+        AllowInteractiveAuthorization = 0x04,
+        _Mask = 0x07,
+    };
+
+    static std::string flagString(uint8_t flags) {
+        if (flags == 0)
+            return "None";
+        std::ostringstream oss;
+        if (flags & NoReplyExpected)
+            oss << "NO_REPLY_EXPECTED ";
+        if (flags & NoAutoStart)
+            oss << "NO_AUTO_START ";
+        if (flags & AllowInteractiveAuthorization)
+            oss << "ALLOW_INTERACTIVE_AUTHORIZATION ";
+        return oss.str();
+    }
+
+    enum class Endian { Little, Big };
+
+    inline static Endian endianness(const OctetBuffer& message)
+    {
+        if (message[0] == 'l')
+            return Endian::Little;
+        else if (message[0] == 'B')
+            return Endian::Big;
+        else
+            throw std::runtime_error("message endian marker invalid");
+    }
+
+    inline static bool swapRequired(const Endian endian)
+    {
+        return (endian == Endian::Little && __BYTE_ORDER != __LITTLE_ENDIAN)
+            || (endian == Endian::Big    && __BYTE_ORDER != __BIG_ENDIAN);
+    }
+
+    inline static uint32_t correctEndianess(const Endian endian, uint32_t value)
+    {
+        return swapRequired(endian) ? bswap_32(value): value;
+    }
+
+    struct Header {
+        // Initial header consists of byte, byte, byte, byte, uint32_t, uint32_t
+        // the next element is the size of the array of field info data
+        // making a total of 16 bytes
+        static constexpr std::size_t MinimumSize = 16;
+        static constexpr std::size_t MaximumSize = MinimumSize + DBus::Type::Array::MaximumSize;
+
+        static std::size_t getSize(const OctetBuffer& message);
+        static std::size_t getMessageSize(const OctetBuffer& message);
+
+        enum Field {
+            Invalid = 0,
+            // The object to send a call to, or the object a signal is emitted from.
+            Path = 1,
+            // The interface to invoke a method call on, or that a signal is emitted from.
+            Interface = 2,
+            // The member, either the method name or signal name.
+            Member = 3,
+            // The name of the error that occurred, for errors.
+            ErrorName = 4,
+            // The serial number of the message this message is a reply to.
+            ReplySerial = 5,
+            // The name of the connection this message is intended for.
+            Destination = 6,
+            // Unique name of the sending connection.
+            Sender = 7,
+            // The signature of the message body.
+            Signature = 8,
+            // The number of Unix file descriptors that accompany the message.
+            UnixFds = 9,
+        };
+
+        struct Fields : public DBus::Type::Array
         {
+            Fields(const Header& header);
+            std::size_t add(Field type, const DBus::Type::Any& value);
+        };
+
+        Header() = default;
+        Header(OctetBuffer& buffer);
+
+        void marshall(MessageOStream& stream);
+
+        std::string getFullName() const {
+            return interface + '.' + member;
         }
 
-        std::string m_Object;
-        std::string m_Interface;
-        std::string m_Method;
+        std::string toString(const std::string& prefix = "") const;
+
+        std::size_t size = 0;
+
+        Endian endianness;
+        Type type = Type::Invalid;
+        uint8_t flags = 0;
+        uint32_t bodySize = 0;
+        uint32_t serial = 0;
+
+        // Header fields
+        std::string path;
+        std::string interface;
+        std::string member;
+        std::string errorName;
+        uint32_t replySerial = 0;
+        std::string destination;
+        DBus::Type::Signature signature;
+        std::string sender;
+        uint32_t unixFds = 0;
     };
 
-    //
-
-    class MethodCallParameters {
-    public:
-        std::string getMarshallingSignature() const;
-        size_t getParameterCount() const;
-        void marshallData(MessageOStream& stream) const;
-
-        const Type::Generic& getParameter(size_t idx) const;
-
-    protected:
-        Type::CompositeBlock m_Contents;
-    };
-
-    class MethodCallParametersIn : public MethodCallParameters {
-    public:
-        // We have a series of ctor's to permit the basic prototypes to be declared
-        // inline, with MethodCallParametersIn("param") etc. Everyone else will need
-        // to use a temporary variable and add()
-        MethodCallParametersIn() {}
-        MethodCallParametersIn(const Type::Generic& v);
-        MethodCallParametersIn(const std::string& v);
-        MethodCallParametersIn(const std::string& v1, uint32_t v2);
-
-        void add(const Type::Generic& value);
-
-        void add(uint8_t value);
-        void add(uint32_t value);
-        void add(const std::string& value);
-    };
-
-    class Header {
-    public:
-        typedef enum {
-            TYPE_INVALID = 0,
-            TYPE_METHOD_CALL = 1,
-            TYPE_METHOD_RETURN = 2,
-            TYPE_ERROR = 3,
-            TYPE_SIGNAL = 4,
-        } Type;
-
-        typedef enum {
-            FLAGS_NONE = 0,
-            FLAGS_NO_REPLY_EXPECTED = 0x01,
-            FLAGS_NO_AUTO_START = 0x02,
-            FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION = 0x04,
-            //
-            FLAGS_MASK = 0x07,
-        } Flags;
-
-        enum {
-            HEADER_INVALID,
-            HEADER_PATH, // The object to send a call to, or the object a signal is
-            // emitted from.
-            HEADER_INTERFACE, // The interface to invoke a method call on, or that a
-            // signal is emitted from. Optional for method calls,
-            // required for signals.
-            HEADER_MEMBER, // The member, either the method name or signal name.
-            HEADER_ERROR_NAME, // The name of the error that occurred, for errors
-            HEADER_REPLY_SERIAL, // The serial number of the message this message is a
-            // reply to.
-            HEADER_DESTINATION, // The name of the connection this message is intended
-            // for.
-            HEADER_SENDER, // Unique name of the sending connection.
-            HEADER_SIGNATURE, // The signature of the message body. If omitted, it is
-            // assumed to be the empty signature "" (i.e. the body
-            // must be 0-length).
-            HEADER_UNIX_FDS, // The number of Unix file descriptors that accompany the
-            // message.
-            //
-            HEADER_FIELD_COUNT // = HEADER_UNIX_FDS+1
-        } HeaderFields;
-
-        uint8_t flags;
-        uint8_t type;
-        uint32_t serial;
-        uint32_t replySerial;
+    // Tuple of PATH, INTERFACE and MEMBER for MethodCall and Signal messages
+    struct Identifier {
+        Identifier(const ObjectPath& path, const InterfaceName& interface,
+            const MemberName& member);
 
         std::string path;
         std::string interface;
         std::string member;
-        std::string destination;
-        std::string sender;
     };
 
-    class Base {
+    class Parameters {
     public:
-        Base(uint32_t serial = 0);
-        Base(const DBus::Type::Struct& header, const std::string& body);
+        // We have a series of ctor's to permit the basic prototypes to be declared
+        // inline, with Parameters("param") etc. Everyone else will need
+        // to use a temporary variable and add()
+        Parameters() = default;
+        Parameters(Parameters&&) = default;
+        Parameters(const Parameters&) = default;
 
-        uint32_t getSerial() const { return m_Header.serial; }
+        template<typename... Param>
+        Parameters(const Param&... param)
+            : m_parameters({ DBus::Type::Any(param)... })
+        {}
 
-        uint32_t getReplySerial() const { return m_Header.replySerial; }
+        Parameters& operator=(Parameters&&) = default;
+        Parameters& operator=(const Parameters&) = default;
 
-        std::string getHeaderPath() const { return m_Header.path; }
+        void add(const DBus::Type::Any& value);
 
-        std::string getHeaderInterface() const { return m_Header.interface; }
+        size_t getParameterCount() const;
+        const DBus::Type::Any& getParameter(size_t idx) const;
 
-        std::string getHeaderMember() const { return m_Header.member; }
+        std::string getSignature() const;
+        void marshall(MessageOStream& stream) const;
 
-        std::string getHeaderSender() const { return m_Header.sender; }
-
-        std::string getHeaderDestination() const { return m_Header.destination; }
-
-        const Type::Generic& getParameter(size_t idx) const
-        {
-            return m_Parameters.getParameter(idx);
-        }
-
-        const size_t getParameterCount() const
-        {
-            return m_Parameters.getParameterCount();
-        }
-
-        const bool isReplyExpected() const
-        {
-            return !(m_Header.flags & DBus::Message::Header::FLAGS_NO_REPLY_EXPECTED)
-                ? true
-                : false;
-        }
+        std::string toString(const std::string& prefix = "") const;
 
     protected:
-        std::string marshallMessage(const DBus::Type::Array& header_fields) const;
-
-        Header m_Header;
-        MethodCallParametersIn m_Parameters;
-
-    private:
-        static uint32_t m_SerialCounter;
-        static boost::recursive_mutex m_SerialCounterMutex;
-
-        void parseParameters(bool isLittleEndian, const std::string& bodydata,
-            const std::string& signature);
+        std::vector<DBus::Type::Any> m_parameters;
     };
 
-    class MethodCall : public Message::Base {
-    public:
-        // This is for outgoing calls
-        MethodCall(const MethodCallIdentifier& name,
-            const MethodCallParametersIn& params = MethodCallParametersIn(),
-            uint32_t flags = 0);
-        // This is for receeiving method calls
-        MethodCall(const DBus::Type::Struct& header, const std::string& body);
+    Message() = default;
+    Message(const Message::Identifier& id,
+            const Message::Parameters& params = {});
+    Message(const Header& header, OctetBuffer& body);
 
-        std::string getFullName() const;
-        std::string getObject() const;
-        std::string getInterface() const;
-        std::string getMethod() const;
+    explicit operator bool() const { return m_Header.type != Type::Invalid; }
 
-        std::string marshall(const std::string& destination) const;
+    // Getters for header information
+    uint32_t getSerial() const { return m_Header.serial; }
+    uint32_t getReplySerial() const { return m_Header.replySerial; }
+    uint32_t getUnixFdCount() const { return m_Header.unixFds; }
+    std::string getPath() const { return m_Header.path; }
+    std::string getMember() const { return m_Header.member; }
+    std::string getSender() const { return m_Header.sender; }
+    std::string getSignature() const { return m_Header.signature.asString(); }
+    std::string getInterface() const { return m_Header.interface; }
+    std::string getErrorName() const { return m_Header.errorName; }
+    std::string getDestination() const { return m_Header.destination; }
 
-    private:
-        MethodCallIdentifier m_Name;
-    };
+    void addParameter(const DBus::Type::Any& value)
+    {
+        m_Parameters.add(value);
+    }
 
-    class MethodReturn : public Message::Base {
-    public:
-        // This is for sending outgoing calls
-        MethodReturn(uint32_t serial);
-        // This is for receeiving method calls
-        MethodReturn(const DBus::Type::Struct& header, const std::string& body);
+    const DBus::Type::Any& getParameter(size_t idx) const
+    {
+        return m_Parameters.getParameter(idx);
+    }
 
-        void addParameter(const Type::Generic& value);
+    size_t getParameterCount() const
+    {
+        return m_Parameters.getParameterCount();
+    }
 
-        std::string marshall(const std::string& destination) const;
+    bool isReplyExpected() const
+    {
+        return (m_Header.flags & Flag::NoReplyExpected) == 0;
+    }
 
-        uint32_t m_SerialReplyingTo;
-    };
+    MessageOStream marshall(std::uint32_t serial) const;
 
-    class Error : public Message::Base {
-    public:
-        // This is for outgoing calls
-        Error(uint32_t serial, const std::string& name, const std::string& message);
-        // This is for receeiving method calls
-        Error(const DBus::Type::Struct& header, const std::string& body);
+protected:
+    void unmarshallBody(
+        Endian endianness,
+        const DBus::Type::Signature& signature,
+        OctetBuffer& bodydata);
 
-        uint32_t getSerialOfReply() const;
-        std::string getMessage() const;
+    Header m_Header;
+    Parameters m_Parameters;
+};
 
-        std::string marshall(const std::string& destination) const;
+class Message::MethodCall : public Message {
+public:
+    MethodCall() = default;
+    // This is for outgoing method calls
+    MethodCall(
+        const BusName& destination, const Identifier& id,
+        const Parameters& params = Parameters(), uint32_t flags = 0);
+    // This is for receiving method calls
+    MethodCall(const Header& header, OctetBuffer& body);
 
-    private:
-        uint32_t m_SerialReplyingTo; // NOTE: Means the query one, on rcvr side
-        std::string m_Errorname; // e.g. biz.brightsign.Error.InvalidParameters
-        std::string m_Message; // i.e. the user text to display
-    };
+    inline std::string getFullName() const { return m_Header.getFullName(); }
+    inline std::string getObject() const { return getPath(); }
+    inline std::string getMethod() const { return getMember(); }
+};
 
-    class Signal : public Base {
-    public:
-        // This is for outgoing calls
-        Signal(const MethodCallIdentifier& name);
-        // This is for receeiving method calls
-        Signal(const DBus::Type::Struct& header, const std::string& body);
+class Message::MethodReturn : public Message {
+public:
+    MethodReturn() = default;
+    // This is for sending outgoing replies
+    MethodReturn(const BusName& destination, uint32_t replySerial,
+                 const Parameters& params = {});
+    // This is for receiving method returns
+    MethodReturn(const Header& header, OctetBuffer& body);
+};
 
-        void addParameter(const Type::Generic& value);
+class Message::Error : public Message {
+public:
+    Error() = default;
+    // This is for outgoing Errors
+    Error(const BusName & destination, uint32_t replySerial,
+          const ErrorName& name, const std::string& message);
+    // This is for receiving Errors
+    Error(const Header& header, OctetBuffer& body);
 
-        std::string marshall(const std::string& destination) const;
+    std::string getName() const;
+    std::string getMessage() const;
+};
 
-    private:
-        MethodCallIdentifier m_SignalName;
-    };
+class Message::Signal : public Message {
+public:
+    Signal() = default;
+    // This is for outgoing broadcast signals
+    Signal(const Identifier& id,
+           const Parameters& params = {});
+    // This is for outgoing unicast signals
+    Signal(const BusName& destination,
+           const Identifier& id,
+           const Parameters& params = {});
+    // This is for receiving signals
+    Signal(const Header& header, OctetBuffer& body);
+};
 
-    typedef std::function<void(const Message::MethodCall& method)>
-        CallbackFunctionMethodCall;
-    typedef std::function<void(const Message::MethodReturn& reply)>
-        CallbackFunctionMethodReturn;
-    typedef std::function<void(const Message::Error& error)> CallbackFunctionError;
-    typedef std::function<void(const Message::Signal& signal)>
-        CallbackFunctionSignal;
-} // namespace Message
+
 } // namespace DBus
-
-#endif //  DBUS_MESSAGE

@@ -24,12 +24,11 @@ namespace test {
         if (byteOrder != __BYTE_ORDER)
             u = __bswap_64(u);
 #endif
-        MessageIStream stream((uint8_t*)&u, sizeof(u), byteOrder != __BYTE_ORDER);
+        OctetBuffer buf((uint8_t*)&u, sizeof(u));
+        MessageIStream stream(buf, byteOrder != __BYTE_ORDER);
         dbusType.unmarshall(stream);
 
-        std::stringstream ss;
-        ss << value;
-        REQUIRE(dbusType.asString() == ss.str());
+        REQUIRE(static_cast<double>(dbusType) == value);
     }
 
     TEST_CASE("Unmarshall double little endian from MessageIStream")
@@ -51,12 +50,11 @@ namespace test {
         stream.writeDouble(value);
 
         Type::Double dbusType;
-        MessageIStream istream((uint8_t*)stream.data.data(), stream.size(), false);
+        OctetBuffer buf((uint8_t*)stream.data.data(), stream.size());
+        MessageIStream istream(buf, false);
         dbusType.unmarshall(istream);
 
-        std::stringstream ss;
-        ss << value;
-        REQUIRE(dbusType.asString() == ss.str());
+        REQUIRE(static_cast<double>(dbusType) == value);
     }
 
 } // namespace test

@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,36 +16,35 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_TYPE_BYTE_H
-#define DBUS_TYPE_BYTE_H
+#pragma once
 
-#include "dbus_type_base.h"
+#include "dbus_type.h"
+
 namespace DBus {
-class MessageOStream;
-class MessageIStream;
 
-namespace Type {
-
-    class Byte : public Base {
+    class Type::Byte : public Basic {
     public:
-        Byte();
-        Byte(size_t v);
-        Byte(const Byte& b);
+        Byte() = default;
+        Byte(const std::uint8_t& b);
 
-        std::string getSignature() const { return s_StaticTypeCode; }
+        static constexpr const char *name = "Byte";
+        static constexpr const char alignment = 1;
+        static constexpr const char code = 'y';
 
-        void marshall(MessageOStream& stream) const;
-        void unmarshall(MessageIStream& data);
+        std::string getName() const override { return name; }
+        std::size_t getAlignment() const override { return alignment; };
+        std::string getSignature() const override { return std::string(1, code); };
 
-        std::string toString(const std::string& prefix = "") const;
-        std::string asString() const;
+        void marshall(MessageOStream& stream) const override;
+        void unmarshall(MessageIStream& data) override;
 
-        static const std::string s_StaticTypeCode;
+        std::string toString(const std::string&) const override;
+        std::string asString() const override;
+
+        operator std::uint8_t() const { return m_Value; };
 
     protected:
-        uint8_t m_Value;
+        std::uint8_t m_Value = 0;
     };
-} // namespace Type
-} // namespace DBus
 
-#endif
+} // namespace DBus

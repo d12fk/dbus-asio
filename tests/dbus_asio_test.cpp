@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -26,11 +27,28 @@ int main()
         DBus::Platform::getSystemBus().c_str());
     DBus::Log::write(DBus::Log::INFO, "Session bus: %s\n",
         DBus::Platform::getSessionBus().c_str());
-    DBus::Native native(DBus::Platform::getSessionBus());
-    sleep(1);
 
-    native.BeginAuth(
-        DBus::AuthenticationProtocol::AUTH_BASIC); // AUTH_BASIC or
-    // AUTH_NEGOTIATE_UNIX_FD
+    DBus::asio::io_context ioc;
+    auto conn = DBus::Connection::create(ioc);
+
+    conn->connect(
+        DBus::Platform::getSessionBus(),
+        DBus::AuthenticationProtocol::create(),
+        [conn](const DBus::Error& e, const std::string& guid, const std::string& name)
+        {
+            if (e)
+                DBus::Log::write(
+                    DBus::Log::ERROR,
+                    "error: %s (%s)\n", e.message.c_str(), e.category.c_str());
+
+            DBus::Log::write(
+                DBus::Log::INFO,
+                ">>> server guid: %s  my bus name: %s\n", guid.c_str(), name.c_str());
+
+            conn->disconnect();
+        });
+
+    ioc.run();
+
     return 0;
 }

@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,54 +16,87 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_TYPE_H
-#define DBUS_TYPE_H
+#pragma once
 
 #include <string>
 #include <vector>
-
-// Our base type, used for implementation convenience
-#include "dbus_type_base.h"
+#include <functional>
 
 namespace DBus {
-class MessageOStream;
-class MessageIStream;
 
-namespace Type {
-    class Array;
-    class Struct;
-    class Signature;
-    class Variant;
+    class MessageIStream;
+    class MessageOStream;
 
-    // Helper methods to return native types
-    uint8_t asByte(const Generic& v);
-    uint32_t asUint32(const Generic& v);
-    std::string asString(const Generic& v);
-    std::string asObjectPath(const Generic& v);
+    class Type {
+    public:
+        class Any;
+        class Basic;
+        class Container;
 
-    // Helper methods to return type-safe DBus references
-    const Type::Array& refArray(const Generic& v);
-    const Type::Struct& refStruct(const Generic& v);
-    const Type::Signature& refSignature(const Generic& v);
-    const Type::Variant& refVariant(const Generic& v);
+        class Int16;
+        class Int32;
+        class Int64;
 
-    // Generic type handling code
-    DBus::Type::Generic create(const std::string& type);
+        class Uint16;
+        class Uint32;
+        class Uint64;
 
-    void marshallData(const DBus::Type::Generic& any, MessageOStream& stream);
-    void unmarshallData(DBus::Type::Generic& result, MessageIStream& stream);
+        class Byte;
+        class Boolean;
+        class UnixFd;
+        class Double;
 
-    std::string toString(const DBus::Type::Generic& data,
-        const std::string& prefix = "");
+        class String;
+        class ObjectPath;
+        class Signature;
 
-    size_t getAlignment(const std::string& declaration);
+        class Array;
+        class Struct;
+        class DictEntry;
+        class Variant;
 
-    std::string extractSignature(const std::string& declaration, size_t idx);
+        // Virtual methods subclasses implement
+        virtual ~Type() = default;
+        virtual std::string getName() const = 0;
+        virtual std::string getSignature() const = 0;
+        virtual std::size_t getAlignment() const = 0;
 
-    std::string getMarshallingSignature(const DBus::Type::Generic& value);
-    std::string
-    getMarshallingSignature(const std::vector<DBus::Type::Generic>& value);
-} // namespace Type
+        virtual void marshall(MessageOStream&) const = 0;
+        virtual void unmarshall(MessageIStream&) = 0;
+
+        // each non-container type should end with \n
+        // as convenience to the calling function
+        virtual std::string toString(const std::string& /*prefix*/) const = 0;
+        virtual std::string asString() const = 0;
+
+        // Helper methods to return native types
+        static int asUnixFd(const Any& v);
+        static bool asBoolean(const Any& v);
+        static double asDouble(const Any& v);
+        static std::string asString(const Any& v);
+        static std::uint8_t asByte(const Any& v);
+        static std::int16_t asInt16(const Any& v);
+        static std::int32_t asInt32(const Any& v);
+        static std::int64_t asInt64(const Any& v);
+        static std::uint16_t asUint16(const Any& v);
+        static std::uint32_t asUint32(const Any& v);
+        static std::uint64_t asUint64(const Any& v);
+
+        // Helper methods to return type-safe DBus references
+        static const Array& refArray(const Any& v);
+        static const Struct& refStruct(const Any& v);
+        static const Variant& refVariant(const Any& v);
+        static const Signature& refSignature(const Any& v);
+        static const DictEntry& refDictEntry(const Any& v);
+
+        // Helper Methods for during marshalling
+        static DBus::Type::Any create(const std::string& type);
+        static std::size_t getAlignment(const std::string& typeCode);
+        static bool isBasicTypeCode(const int code);
+    };
+
+    class Type::Basic : public Type {};
+
+    class Type::Container : public Type {};
+
 } // namespace DBus
-
-#endif

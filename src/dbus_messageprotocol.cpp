@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,8 +16,6 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#include <boost/thread/recursive_mutex.hpp>
-
 #include "dbus_log.h"
 #include "dbus_utils.h"
 
@@ -29,223 +28,123 @@
 #include "dbus_messageostream.h"
 #include "dbus_messageprotocol.h"
 
-#include <byteswap.h>
+#include <iostream>
 
-namespace {
-
-inline bool SwapRequired(uint8_t c)
+DBus::MessageProtocol::Ptr
+DBus::MessageProtocol::start(asio::io_context& ioContext, Transport::Ptr transport)
 {
-    return (c == 'l' && __BYTE_ORDER != __LITTLE_ENDIAN) || (c == 'B' && __BYTE_ORDER != __BIG_ENDIAN);
+    struct ShareableMsgProto : public MessageProtocol {
+        ShareableMsgProto(asio::io_context& ioContext, Transport::Ptr transport)
+            : MessageProtocol(ioContext, transport) {};
+    };
+    auto obj = std::make_shared<ShareableMsgProto>(ioContext, transport);
+    obj->asyncReadMessage(ReadState::Peek);
+    return obj;
 }
 
-inline uint32_t CorrectEndianess(uint8_t c, uint32_t value)
+DBus::MessageProtocol::MessageProtocol(asio::io_context& ioContext, Transport::Ptr transport)
+    : m_ioContext(ioContext)
+    , m_transport(transport)
 {
-    if (SwapRequired(c)) {
-        return bswap_32(value);
+    m_messageBuffer.reserve(256);
+}
+
+DBus::MessageProtocol::ReadBuffer
+DBus::MessageProtocol::makeReadBuffer(ReadState state, MessageBuffer& buffer)
+{
+    if (state == ReadState::Peek) {
+        buffer.resize(Message::Header::MinimumSize);
     }
-    return value;
-}
-
-static const size_t MAX_ARRAY_SIZE = 67108864;
-static const size_t MAX_MESSAGE_SIZE = 134217728;
-
-} // namespace
-
-DBus::MessageProtocol::MessageProtocol()
-    : m_State(STATE_GETHEADERSIZE)
-    , m_headerSize(0)
-    , m_bodySize(0)
-{
-    setMethodCallHandler(std::bind(&MessageProtocol::onReceiveMethodCall, this,
-        std::placeholders::_1));
-    setMethodReturnHandler(std::bind(&MessageProtocol::onReceiveMethodReturn,
-        this, std::placeholders::_1));
-    setErrorHandler(
-        std::bind(&MessageProtocol::onReceiveError, this, std::placeholders::_1));
-    setSignalHandler(std::bind(&MessageProtocol::onReceiveSignal, this,
-        std::placeholders::_1));
-
-    reset();
-}
-
-void DBus::MessageProtocol::reset() { startMessage(); }
-
-void DBus::MessageProtocol::setMethodCallHandler(
-    const DBus::Message::CallbackFunctionMethodCall& callback)
-{
-    std::lock_guard<std::recursive_mutex> lock(m_CallbackMutex);
-    m_MethodCallCallback = callback;
-}
-
-void DBus::MessageProtocol::setMethodReturnHandler(
-    const DBus::Message::CallbackFunctionMethodReturn& callback)
-{
-    std::lock_guard<std::recursive_mutex> lock(m_CallbackMutex);
-    m_MethodReturnCallback = callback;
-}
-
-void DBus::MessageProtocol::setErrorHandler(
-    const DBus::Message::CallbackFunctionError& callback)
-{
-    std::lock_guard<std::recursive_mutex> lock(m_CallbackMutex);
-    m_ErrorCallback = callback;
-}
-
-void DBus::MessageProtocol::setSignalHandler(
-    const DBus::Message::CallbackFunctionSignal& callback)
-{
-    std::lock_guard<std::recursive_mutex> lock(m_CallbackMutex);
-    m_SignalCallback = callback;
-}
-
-void DBus::MessageProtocol::startMessage()
-{
-    m_State = STATE_GETHEADERSIZE;
-
-    m_HeaderStruct.clear();
-    m_HeaderStruct.setSignature("(yyyyuua(yv))");
-    m_headerSize = 0;
-    m_bodySize = 0;
-}
-
-bool DBus::MessageProtocol::getHeaderSize(OctetBuffer& buffer)
-{
-    // Initial header consists of byte, byte, byte, byte, uint32_t, uint32_t
-    // the next element is the size of the array of field info data
-    // making a total of 16 bytes
-    if (buffer.size() >= 16) {
-        // Read the size of the array
-        m_headerSize = *(uint32_t*)(buffer.data() + 12);
-        m_headerSize = CorrectEndianess(buffer[0], m_headerSize);
-        if (m_headerSize > MAX_ARRAY_SIZE) {
-            throw std::out_of_range("DBus message error: Maximum size exceeded");
-        }
-
-        // Add the 16 bytes of the header
-        m_headerSize += 16;
-        // The header MUST finish on an 8 byte boundary
-        m_headerSize += (m_headerSize % 8 == 0) ? 0 : 8 - (m_headerSize % 8);
-
-        m_State = STATE_UNMARSHALLHEADER;
-        return true;
+    else { // ReadState::Receive
+        OctetBuffer header = { buffer.data(), buffer.size() };
+        buffer.resize(Message::Header::getMessageSize(header));
     }
-    return false;
+    return { buffer.data(), buffer.size() };
 }
 
-bool DBus::MessageProtocol::unmarshallHeader(OctetBuffer& buffer)
+void DBus::MessageProtocol::asyncReadMessage(ReadState state)
 {
-    if (buffer.size() >= m_headerSize) {
-        // When all of the header is buffered the header can be unmarshalled
-        MessageIStream istream(buffer.data(), m_headerSize,
-            SwapRequired(buffer[0]));
-        m_HeaderStruct.unmarshall(istream);
-        buffer.remove_prefix(m_headerSize);
-        // The body of the message is next
-        m_bodySize = Type::asUint32(m_HeaderStruct[4]);
+    if (state == ReadState::Peek) {
+        m_transport->asyncPeek(
+            makeReadBuffer(state, m_messageBuffer),
+            [self = shared_from_this()]
+            (const error_code& error, std::size_t bytes_read)
+            {
+                if (error)
+                    return self->invokeErrorHandler(0, error);
+                if (bytes_read == 0)
+                    return self->releasePendingHandlers();
+                if (bytes_read < Message::Header::MinimumSize)
+                    return self->invokeErrorHandler(0, {
+                        "short read peeking header",
+                        "message protocol :: read message" });
 
-        if ((m_headerSize + m_bodySize) > MAX_MESSAGE_SIZE) {
-            throw std::out_of_range("DBus message error: Maximum size exceeded");
-        }
+                self->asyncReadMessage(ReadState::Receive);
+            });
+    } else {
+        m_transport->asyncRead(
+            makeReadBuffer(state, m_messageBuffer),
+            m_unixFdBuffer,
+            [self = shared_from_this()]
+            (error_code error, std::size_t bytes_read) mutable
+            {
+                if (error)
+                    return self->invokeErrorHandler(0, error);
+                if (bytes_read == 0)
+                    return self->releasePendingHandlers();
 
-        m_State = STATE_GETBODY;
-        return true;
-    }
-    return false;
-}
+                MessageBuffer& msg = self->m_messageBuffer;
+                UnixFdBuffer& fds = self->m_unixFdBuffer;
+                OctetBuffer message(msg.data(), msg.size(), fds);
 
-bool DBus::MessageProtocol::getBody(OctetBuffer& buffer)
-{
-    if (buffer.size() >= m_bodySize) {
-        std::string body((const char*)buffer.data(), m_bodySize);
-        buffer.remove_prefix(m_bodySize);
-        onBodyComplete(body);
-        return true;
-    }
-    return false;
-}
+                if (bytes_read < Message::Header::MinimumSize ||
+                    bytes_read < Message::Header::getMessageSize(message))
+                    return self->invokeErrorHandler(0, {
+                        "short read receiving message",
+                        "message protocol :: read message" });
 
-void DBus::MessageProtocol::processData(OctetBuffer& buffer)
-{
-    while (buffer.size()) {
-        if (m_State == STATE_GETHEADERSIZE) {
-            if (!getHeaderSize(buffer)) {
-                return;
-            }
-        }
+                Log::write(Log::TRACE, "\nDBus :: Receive : Message Data : %ld bytes, %ld FDs\n",
+                           msg.size(), fds.size());
+                Log::writeHex(Log::TRACE, "    ", msg.data(), msg.size());
+                self->dispatchMessage(message);
 
-        if (m_State == STATE_UNMARSHALLHEADER) {
-            if (!unmarshallHeader(buffer)) {
-                return;
-            }
-        }
-
-        if (m_State == STATE_GETBODY) {
-            if (!getBody(buffer)) {
-                return;
-            }
-        }
+                msg.clear();
+                fds.clear();
+                self->asyncReadMessage(ReadState::Peek);
+            });
     }
 }
 
-void DBus::MessageProtocol::onReceiveData(OctetBuffer& buffer)
+void DBus::MessageProtocol::dispatchMessage(OctetBuffer& message)
 {
-    // If a whole message is contained in the buffer
-    // it can be processed without copying but only if
-    // there is no data already cached
-    if (m_octetCache.empty()) {
-        processData(buffer);
+    m_stats.bytes_recv += message.size();
+    const Message::Header header(message);
+    Log::write(Log::TRACE, "DBus :: Recv : dispatching %s message\n",
+               Message::typeString(header.type).c_str());
+
+    switch (header.type) {
+    case Message::Type::MethodCall:
+        ++m_stats.count_recv_methodcalls;
+        invokeMethodCallHandler(header.getFullName(), Message::MethodCall(header, message));
+        break;
+
+    case Message::Type::MethodReturn:
+        ++m_stats.count_recv_methodreturns;
+        invokeMethodReturnHandler(header.replySerial, Message::MethodReturn(header, message));
+        break;
+
+    case Message::Type::Signal:
+        ++m_stats.count_recv_signals;
+        invokeSignalHandler(header.getFullName(), Message::Signal(header, message));
+        break;
+
+    case Message::Type::Error:
+        ++m_stats.count_recv_errors;
+        invokeErrorHandler(header.replySerial, Message::Error(header, message));
+        break;
+
+    default:
+        Log::write(Log::WARNING, "DBus :: Ignoring unknown message type %d\n",
+            static_cast<std::underlying_type_t<decltype(header.type)>>(header.type));
     }
-
-    // Append any remaining data to the data cache
-    m_octetCache.append(buffer.data(), buffer.size());
-    buffer.remove_prefix(buffer.size());
-
-    // If the data cache is not empty process it
-    if (!m_octetCache.empty()) {
-        OctetBuffer cachedBuffer(m_octetCache.data(), m_octetCache.size());
-        processData(cachedBuffer);
-        m_octetCache.erase(0, m_octetCache.size() - cachedBuffer.size());
-    }
-}
-
-void DBus::MessageProtocol::onBodyComplete(const std::string& body)
-{
-    Log::write(Log::TRACE, "DBus :: Unmarshall : Body complete.\n");
-
-    try
-    {
-        uint8_t type = Type::asByte(m_HeaderStruct[1]);
-        std::lock_guard<std::recursive_mutex> lock(m_CallbackMutex);
-        switch (type) {
-        case TYPE_METHOD:
-            m_MethodCallCallback(Message::MethodCall(m_HeaderStruct, body));
-            break;
-
-        case TYPE_METHOD_RETURN:
-            m_MethodReturnCallback(Message::MethodReturn(m_HeaderStruct, body));
-            break;
-
-        case TYPE_ERROR:
-            m_ErrorCallback(Message::Error(m_HeaderStruct, body));
-            break;
-
-        case TYPE_SIGNAL:
-            m_SignalCallback(Message::Signal(m_HeaderStruct, body));
-            break;
-
-        default:
-            Log::write(Log::WARNING, "DBus :: Unknown message type %d received\n",
-                type);
-        }
-        Log::write(Log::TRACE,
-            "DBus :: Message type %d dispatched : new message initialized\n",
-            type);
-    }
-    catch(const std::exception & e)
-    {
-        // Catch exceptions from std::function such as bad_function_call. No action required.
-        Log::write(Log::INFO, "DBus :: Exception caught in onBodyComplete: %s\n", e.what());
-    }
-
-    startMessage();
 }

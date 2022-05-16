@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -20,43 +21,32 @@
 #include "dbus_messageostream.h"
 #include <sstream>
 
-const std::string DBus::Type::Boolean::s_StaticTypeCode("b");
-
-DBus::Type::Boolean::Boolean()
-    : m_Value(0)
-{
-    setSignature(s_StaticTypeCode);
-}
-
-DBus::Type::Boolean::Boolean(uint32_t v)
+DBus::Type::Boolean::Boolean(bool v)
     : m_Value(v)
-{
-    setSignature(s_StaticTypeCode);
-}
+{}
 
 void DBus::Type::Boolean::marshall(MessageOStream& stream) const
 {
-    stream.writeBoolean(m_Value ? true : false);
+    stream.writeBoolean(m_Value);
 }
 
 void DBus::Type::Boolean::unmarshall(MessageIStream& stream)
 {
-    stream.read<uint32_t>(&m_Value);
+    uint32_t tmp;
+    stream.read<uint32_t>(&tmp);
+    m_Value = tmp == 0 ? false : true;
 }
 
-std::string DBus::Type::Boolean::toString(const std::string& prefix) const
+std::string DBus::Type::Boolean::toString(const std::string&) const
 {
     std::stringstream ss;
-
-    ss << prefix << "Boolean ";
-    ss << (m_Value ? "True" : "Talse") << "\n";
-
+    ss << "Boolean " << m_Value << '\n';
     return ss.str();
 }
 
 std::string DBus::Type::Boolean::asString() const
 {
     std::stringstream ss;
-    ss << (size_t)m_Value;
+    ss << m_Value;
     return ss.str();
 }

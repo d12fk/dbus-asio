@@ -11,7 +11,8 @@ namespace test {
     {
         std::basic_string<uint8_t> data;
         data.push_back(65);
-        MessageIStream istream(data.data(), data.size(), false);
+        OctetBuffer buf(data.data(), data.size());
+        MessageIStream istream(buf, false);
 
         Type::Byte byte;
         byte.unmarshall(istream);
@@ -23,8 +24,8 @@ namespace test {
         MessageOStream stream;
         stream.writeByte(213);
 
-        MessageIStream istream((uint8_t*)stream.data.data(), stream.data.size(),
-            false);
+        OctetBuffer buf((uint8_t*)stream.data.data(), stream.data.size());
+        MessageIStream istream(buf, false);
         Type::Byte byte;
         byte.unmarshall(istream);
         REQUIRE(byte.asString() == std::to_string(213));

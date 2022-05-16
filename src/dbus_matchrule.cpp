@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,117 +16,148 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#include <algorithm>
-#include <boost/algorithm/string.hpp>
-#include <boost/thread/recursive_mutex.hpp>
-#include <boost/tokenizer.hpp>
-
-#include "dbus_log.h"
 #include "dbus_matchrule.h"
-#include "dbus_message.h"
+#include "dbus_type_objectpath.h"
+#include "dbus_names.h"
+
+#include <sstream>
 
 // https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
 
-DBus::MatchRule::MatchRule(const std::string& rule,
-    const Message::CallbackFunctionSignal& handler)
+DBus::MatchRule&
+DBus::MatchRule::type(Type type)
 {
-    // Parse the rule string into something programmatic
-
-    // 1. Split by the comma
-    boost::char_separator<char> separator { "," };
-    boost::tokenizer<boost::char_separator<char>> tokenizer { rule, separator };
-    for (auto&& param : tokenizer) {
-        // 2. Then split each at the equals
-        std::vector<std::string> keyvalue;
-        boost::split(keyvalue, param, boost::is_any_of("="));
-
-        // Valid keys are: type, sender, interface, member, path, path_namespace,
-        // destination, arg*, eavesdrop We're happy for [] to throw on malformed
-        // rules, since that's watch we'd do anyway in this case
-
-        // 3. Strip the single quotes from the value
-        keyvalue[1].pop_back();
-        keyvalue[1].erase(0, 1);
-
-        // We store it somewhere convenient to speed the isMateched checks
-        if (keyvalue[0] == "type") {
-            type = keyvalue[1];
-        } else if (keyvalue[0] == "sender") {
-            sender = keyvalue[1];
-        } else if (keyvalue[0] == "interface") {
-            interface = keyvalue[1];
-        } else if (keyvalue[0] == "member") {
-            member = keyvalue[1];
-        } else if (keyvalue[0] == "path") {
-            path = keyvalue[1];
-        } else if (keyvalue[0] == "path_namespace") {
-            path_namespace = keyvalue[1];
-        } else if (keyvalue[0] == "destination") {
-            destination = keyvalue[1];
-        }
-
-        // TODO: eavesdrop
-        // TODO: arg
-    }
-
-    // Using both path and path_namespace in the same match rule is not allowed.
-    if (path != "" && path_namespace != "") {
-        throw std::runtime_error(
-            "Match rules with both 'path' and 'path_namespace' are not allowed.");
-    }
-
-    // Finally, remember the callback
-    callback = handler;
+    if (type == Type::MethodCall)
+        m_type = "method_call";
+    else if (type == Type::MethodReturn)
+        m_type = "method_return";
+    else if (type == Type::Signal)
+        m_type = "signal";
+    else if (type == Type::Error)
+        m_type = "error";
+    return *this;
 }
 
-bool DBus::MatchRule::isMatched(const DBus::Message::Signal& signal)
+DBus::MatchRule&
+DBus::MatchRule::sender(const BusName& name)
 {
-    // These checks are AND, so all set parameters must agree
-    if (sender != "" && sender != signal.getHeaderSender()) {
-        return false;
-    }
-
-    if (interface != "" && interface != signal.getHeaderInterface()) {
-        return false;
-    }
-
-    if (member != "" && member != signal.getHeaderMember()) {
-        return false;
-    }
-
-    if (destination != "" && destination != signal.getHeaderDestination()) {
-        return false;
-    }
-
-    std::string signal_path(signal.getHeaderPath());
-    if (path != "" && path != signal_path) {
-        return false;
-    }
-
-    // For example, path_namespace='/com/example/foo' would match signals sent
-    // by /com/example/foo or by /com/example/foo/bar, but not by
-    // /com/example/foobar.
-    if (path_namespace != "") {
-        if (signal_path.find(path_namespace) != 0) {
-            return false;
-        }
-
-        // This handles the 3rd case, by checking the character _after_ the match is
-        // found: if it's not the terminator or another path (i.e. a new /) the
-        // search fails.
-        auto next_char = signal_path.at(path_namespace.size());
-        if (next_char != '\0' && next_char != '/') {
-            return false;
-        }
-    }
-
-    // TODO: eavesdrop
-    // TODO: arg
-
-    return true;
+    m_sender = name;
+    return *this;
 }
 
-void DBus::MatchRule::invoke(const DBus::Message::Signal& signal)
+DBus::MatchRule&
+DBus::MatchRule::interface(const InterfaceName& name)
 {
-    callback(signal);
+    m_interface = name;
+    return *this;
+}
+
+DBus::MatchRule&
+DBus::MatchRule::member(const MemberName& name)
+{
+    m_member = name;
+    return *this;
+}
+
+DBus::MatchRule&
+DBus::MatchRule::path(const ObjectPath& name)
+{
+    if (!m_pathNamespace.empty())
+        throw InvalidMatchRule(
+            "path and path_namespace are not allowed together.");
+    m_path = name;
+    return *this;
+}
+
+DBus::MatchRule&
+DBus::MatchRule::pathNamespace(const ObjectPath& name)
+{
+    if (!m_path.empty())
+        throw InvalidMatchRule(
+            "path and path_namespace are not allowed together.");
+    m_pathNamespace = name;
+    return *this;
+}
+
+DBus::MatchRule&
+DBus::MatchRule::destination(const UniqueName& name)
+{
+    m_destination = name;
+    return *this;
+}
+
+DBus::MatchRule&
+DBus::MatchRule::arg0Namespace(const NamespaceName& name)
+{
+    m_arg0Namespace = name;
+    return *this;
+}
+
+DBus::MatchRule&
+DBus::MatchRule::arg(std::uint8_t index, const std::string& string)
+{
+    if (index > MaximumIndex)
+        throw InvalidMatchRule(
+            "arg index exceeds " + std::to_string(MaximumIndex));
+    m_arg[index] = string;
+    escapeApostrophes(m_arg[index]);
+    return *this;
+}
+
+DBus::MatchRule&
+DBus::MatchRule::argPath(std::uint8_t index, const std::string& string)
+{
+    if (index > MaximumIndex)
+        throw InvalidMatchRule(
+            "arg path index exceeds " + std::to_string(MaximumIndex));
+    m_argPath[index] = string;
+    escapeApostrophes(m_argPath[index]);
+    return *this;
+}
+
+std::string DBus::MatchRule::str() const
+{
+    std::ostringstream matchRule;
+
+    if (!m_type.empty())
+        matchRule << ",type='" << m_type << "'";
+    if (!m_sender.empty())
+        matchRule << ",sender='" << m_sender << "'";
+    if (!m_interface.empty())
+        matchRule << ",interface='" << m_interface << "'";
+    if (!m_member.empty())
+        matchRule << ",member='" << m_member << "'";
+    if (!m_path.empty())
+        matchRule << ",path='" << m_path << "'";
+    if (!m_pathNamespace.empty())
+        matchRule << ",path_namespace='" << m_pathNamespace << "'";
+    if (!m_destination.empty())
+        matchRule << ",destination='" << m_destination << "'";
+    if (!m_arg0Namespace.empty())
+        matchRule << ",arg0namespace='" << m_arg0Namespace << "'";
+
+    for (auto it = m_arg.cbegin(); it != m_arg.cend(); ++it)
+        matchRule << ",arg" + std::to_string(it->first) + "='" << it->second << "'";
+
+    for (auto it = m_argPath.cbegin(); it != m_argPath.cend(); ++it)
+        matchRule << ",arg" + std::to_string(it->first) + "path='" << it->second << "'";
+
+    // Return empty string for match all rule
+    if (matchRule.tellp() == 0)
+        return "";
+
+    // Remove the leading comma from match rule
+    return matchRule.str().substr(1);
+}
+
+void DBus::MatchRule::escapeApostrophes(std::string& value)
+{
+    const std::string what("'");
+    const std::string with("'\\''");
+
+    std::size_t pos = 0;
+    while ((pos = value.find(what, pos)) != value.npos) {
+        value.replace(pos, what.size(), with);
+        pos += with.size();
+    }
 }

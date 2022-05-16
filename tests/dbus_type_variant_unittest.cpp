@@ -16,8 +16,8 @@ namespace test {
         uint32_t value)
     {
         Type::Variant variant;
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         variant.unmarshall(istream);
 
         REQUIRE(variant.asString() == std::to_string(value));
@@ -77,10 +77,9 @@ namespace test {
         MessageOStream ostream;
         input.marshall(ostream);
 
-        Type::Variant output;
-        output.setSignature(input.getSignature());
-        MessageIStream istream((uint8_t*)ostream.data.data(), ostream.data.size(),
-            false);
+        Type::Variant output(input.getSignature());
+        OctetBuffer buf((uint8_t*)ostream.data.data(), ostream.data.size());
+        MessageIStream istream(buf, false);
         output.unmarshall(istream);
 
         REQUIRE(input.toString() == output.toString());

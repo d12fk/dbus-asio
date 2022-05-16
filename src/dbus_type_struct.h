@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,75 +16,44 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_TYPE_STRUCT_H
-#define DBUS_TYPE_STRUCT_H
+#pragma once
 
-#include "dbus_type.h"
+#include "dbus_type_any.h"
 
 namespace DBus {
-class MessageOStream;
-class MessageIStream;
 
-namespace Type {
-    class Byte;
-    class Boolean;
-    class ObjectPath;
-    class Int16;
-    class Uint16;
-    class Int32;
-    class Uint32;
-    class Int64;
-    class Uint64;
-    class Double;
-    class String;
-    class Variant;
-    class Struct;
-    class DictEntry;
-
-    class Struct : public Base {
+    class Type::Struct : public Container {
     public:
-        Struct();
+        Struct() = default;
+        Struct(const Signature& signature);
+        Struct(const std::string& signature);
+
+        static constexpr const char code_start = '(';
+        static constexpr const char code_end = ')';
+
+        static constexpr const char *name = "Struct";
+        static constexpr std::size_t alignment = 8;
+        static constexpr const char code = code_start;
+
+        std::string getName() const override { return name; }
+        std::size_t getAlignment() const override { return alignment; };
+        std::string getSignature() const override;
+
+        void marshall(MessageOStream& stream) const override;
+        void unmarshall(MessageIStream& stream) override;
+
+        std::string toString(const std::string& prefix = "") const override;
+        std::string asString() const override;
 
         void clear();
+        void add(const DBus::Type::Any& v);
 
-        void add(const DBus::Type::Byte& v);
-        void add(const DBus::Type::Boolean& v);
-        void add(const DBus::Type::ObjectPath& v);
-        void add(const DBus::Type::Int16& v);
-        void add(const DBus::Type::Uint16& v);
-        void add(const DBus::Type::Int32& v);
-        void add(const DBus::Type::Uint32& v);
-        void add(const DBus::Type::Int64& v);
-        void add(const DBus::Type::Uint64& v);
-        void add(const DBus::Type::Double& v);
-        void add(const DBus::Type::String& v);
-        void add(const DBus::Type::Variant& v);
-        void add(const DBus::Type::Signature& v);
-        void add(const DBus::Type::Struct& v);
-        void add(const DBus::Type::DictEntry& v);
-
-        std::string getSignature() const
-        {
-            // if no entries???
-            return "(" + DBus::Type::getMarshallingSignature(m_Value) + ")";
-        }
-
-        size_t getAlignment() const { return 8; }
-        void marshall(MessageOStream& stream) const;
-        void unmarshall(MessageIStream& stream);
-
-        std::string toString(const std::string& prefix = "") const;
-        std::string asString() const;
-
-        size_t getEntries() const { return m_Value.size(); }
-        const Generic& operator[](std::size_t idx) const { return m_Value[idx]; }
-
-        static std::string s_StaticTypeCode;
+        std::size_t size() const { return m_elements.size(); }
+        const Any& operator[](std::size_t pos) const { return m_elements.at(pos); }
 
     private:
-        std::vector<Generic> m_Value;
+        Signature m_Signature;
+        std::vector<Any> m_elements;
     };
-} // namespace Type
-} // namespace DBus
 
-#endif
+} // namespace DBus

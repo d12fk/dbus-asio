@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,17 +16,24 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_MESSAGEOSTREAM_H
-#define DBUS_MESSAGEOSTREAM_H
+#pragma once
 
 #include "dbus_utils.h"
+#include "dbus_octetbuffer.h" // for UnixFdBuffer
+#include <stdexcept>
 #include <cstdint>
+#include <vector>
+#include <memory>
+#include <unistd.h>
 
 namespace DBus {
 
 class MessageOStream {
 public:
+    using Ptr = std::shared_ptr<MessageOStream>;
+
     std::string data;
+    UnixFdBuffer fds;
 
     size_t size() const { return data.length(); }
 
@@ -77,9 +85,12 @@ public:
 
     void write(const std::string& str) { data.append(str.data(), str.length()); }
 
-    void write(const MessageOStream& stream)
+    void write(const MessageOStream& other)
     {
-        data.append(stream.data.data(), stream.data.length());
+        data.append(other.data.data(), other.data.length());
+        if (fds.size())
+            throw std::runtime_error("internal error: overwriting UnixFds");
+        fds = other.fds;
     }
 
     void writeString(const std::string& str)
@@ -107,6 +118,21 @@ public:
         writeByte(0);
     }
 
+    void writeUnixFd(int fd)
+    {
+        if (fds.size() > 253)
+            throw std::runtime_error("more than 253 UnixFds");
+        fds.push_back(fd);
+        writeUint32(fds.size() - 1);
+    }
+
+    void clearUnixFds()
+    {
+        for (auto fd : fds)
+            ::close(fd);
+        fds.clear();
+    }
+
     void pad(size_t padding)
     {
         data.append(DBus::Utils::getPadding(padding, data.length()), 0);
@@ -118,6 +144,5 @@ public:
 
     void pad8() { pad(8); }
 };
-} // namespace DBus
 
-#endif
+} // namespace DBus

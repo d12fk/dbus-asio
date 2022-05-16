@@ -23,16 +23,15 @@
 
 namespace DBus {
 
-MessageIStream::MessageIStream(const uint8_t* data, size_t size,
-    bool swapByteOrder)
-    : m_data(data, size)
+MessageIStream::MessageIStream(OctetBuffer& data, bool swapByteOrder)
+    : m_data(data)
     , m_offset(0)
     , m_swapByteOrder(swapByteOrder)
 {
 }
 
 MessageIStream::MessageIStream(MessageIStream& stream, size_t size)
-    : m_data(stream.m_data.data(), size)
+    : m_data(stream.m_data, size)
     , m_offset(stream.m_offset)
     , m_swapByteOrder(stream.m_swapByteOrder)
 {
@@ -83,6 +82,13 @@ void MessageIStream::read(std::string& string, size_t size)
     string.append((const char*)m_data.data(), size);
     m_data.remove_prefix(size);
     m_offset += size;
+}
+
+int MessageIStream::readUnixFd()
+{
+    std::uint32_t index;
+    read<std::uint32_t>(&index);
+    return m_data.getUnixFd(index);
 }
 
 bool MessageIStream::empty() { return m_data.empty(); }

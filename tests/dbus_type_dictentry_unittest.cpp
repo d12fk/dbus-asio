@@ -21,18 +21,17 @@ namespace test {
         const std::string& stream,
         const std::string& key, uint32_t value)
     {
-        Type::DictEntry dictEntry;
-        dictEntry.setSignature("{su}");
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        Type::DictEntry dictEntry("{su}");
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         dictEntry.unmarshall(istream);
 
         std::stringstream ss;
-        ss << "DictEntry ({su}) : {" << std::endl;
+        ss << "DictEntry {su} : {" << std::endl;
         ss << "   key:      String (" << key.size() << ") \"" << key << "\""
            << std::endl;
         ss << "   value:    Uint32 " << value << " (0x";
-        ss << std::hex << std::setw(4) << std::setfill('0') << value;
+        ss << std::hex << std::setw(8) << std::setfill('0') << value;
         ss << std::dec << std::setw(0) << ")" << std::endl;
         ss << "}" << std::endl;
 
@@ -66,24 +65,23 @@ namespace test {
         const int32_t key,
         const std::pair<double, uint8_t>& value)
     {
-        Type::DictEntry dictEntry;
-        dictEntry.setSignature("{i(dy)}");
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder != __LITTLE_ENDIAN);
+        Type::DictEntry dictEntry("{i(dy)}");
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder != __LITTLE_ENDIAN);
         dictEntry.unmarshall(istream);
 
         std::stringstream ss;
-        ss << "DictEntry ({i(dy)}) : {" << std::endl;
+        ss << "DictEntry {i(dy)} : {" << std::endl;
         ss << "   key:      Int32 " << key << " (0x";
-        ss << std::hex << std::setw(4) << std::setfill('0') << key;
+        ss << std::hex << std::setw(8) << std::setfill('0') << key;
         ss << std::dec << std::setw(0) << ")" << std::endl;
-        ss << "   value:    Struct (dy) <" << std::endl;
+        ss << "   value:    Struct (dy) : (" << std::endl;
         ss << "      Double " << value.first << std::endl;
         ss << "      Byte " << static_cast<unsigned int>(value.second) << " (0x";
         ss << std::hex << std::setw(2) << std::setfill('0')
            << static_cast<unsigned int>(value.second);
         ss << std::dec << std::setw(0) << ")" << std::endl;
-        ss << "   >" << std::endl;
+        ss << "   )" << std::endl;
         ss << "}" << std::endl;
 
         REQUIRE(dictEntry.toString() == ss.str());
@@ -195,10 +193,10 @@ namespace test {
             0x00,
         };
 
-        Type::DictEntry dictEntry;
-        dictEntry.setSignature("{vu}");
-        MessageIStream istream(encoded.data(), encoded.size(), false);
-        REQUIRE_THROWS_WITH(dictEntry.unmarshall(istream), "Invalid basic type: v");
+        Type::DictEntry dictEntry("{vu}");
+        OctetBuffer buf(encoded.data(), encoded.size());
+        MessageIStream istream(buf, false);
+        REQUIRE_THROWS_WITH(dictEntry.unmarshall(istream), "DictEntry key has invalid basic type: v");
     }
 
 } // namespace test

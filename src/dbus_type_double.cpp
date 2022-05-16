@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -20,19 +21,9 @@
 #include "dbus_messageostream.h"
 #include <sstream>
 
-const std::string DBus::Type::Double::s_StaticTypeCode("d");
-
-DBus::Type::Double::Double()
-    : m_Value(0)
-{
-    setSignature(s_StaticTypeCode);
-}
-
-DBus::Type::Double::Double(double v)
+DBus::Type::Double::Double(const double& v)
     : m_Value(v)
-{
-    setSignature(s_StaticTypeCode);
-}
+{}
 
 void DBus::Type::Double::marshall(MessageOStream& stream) const
 {
@@ -44,19 +35,14 @@ void DBus::Type::Double::unmarshall(MessageIStream& stream)
     stream.read(&m_Value);
 }
 
-std::string DBus::Type::Double::toString(const std::string& prefix) const
+std::string DBus::Type::Double::toString(const std::string&) const
 {
-    std::stringstream ss;
-
-    ss << prefix << "Double ";
-    ss << m_Value << "\n";
-
-    return ss.str();
+    std::ostringstream oss;
+    oss << "Double " << m_Value << "\n";
+    return oss.str();
 }
 
 std::string DBus::Type::Double::asString() const
 {
-    std::stringstream ss;
-    ss << m_Value;
-    return ss.str();
+    return std::to_string(m_Value);
 }

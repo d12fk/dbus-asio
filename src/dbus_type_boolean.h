@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,35 +16,36 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_TYPE_BOOLEAN_H
-#define DBUS_TYPE_BOOLEAN_H
+#pragma once
 
-#include "dbus_type_base.h"
+#include "dbus_type.h"
 
 namespace DBus {
-class MessageOStream;
-class MessageIStream;
 
-namespace Type {
-
-    class Boolean : public Base {
+    class Type::Boolean : public Basic {
     public:
-        Boolean();
-        Boolean(uint32_t v);
+        Boolean() = default;
+        Boolean(bool v);
 
-        size_t getAlignment() const { return 4; }
-        void marshall(MessageOStream& stream) const;
-        void unmarshall(MessageIStream& stream);
+        static constexpr const char *name = "Boolean";
+        static constexpr std::size_t alignment = 4;
+        static constexpr const char code = 'b';
 
-        std::string toString(const std::string& prefix = "") const;
-        std::string asString() const;
+        std::string getName() const override { return name; }
+        std::size_t getAlignment() const override { return alignment; };
+        std::string getSignature() const override { return std::string(1, code); };
 
-        static const std::string s_StaticTypeCode;
+        void marshall(MessageOStream& stream) const override;
+        void unmarshall(MessageIStream& stream) override;
+
+        std::string toString(const std::string&) const override;
+        std::string asString() const override;
+
+        operator bool() const { return m_Value; };
 
     protected:
-        uint32_t m_Value;
+        bool m_Value = false;
     };
-} // namespace Type
+
 } // namespace DBus
 
-#endif

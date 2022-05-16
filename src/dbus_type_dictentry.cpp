@@ -15,18 +15,18 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
+#include "dbus_type_signature.h"
 #include "dbus_type_dictentry.h"
 #include "dbus_type.h"
 #include "dbus_type_string.h"
 #include "dbus_type_uint32.h"
-#include <sstream>
 
 #include "dbus_message.h"
 #include "dbus_messageistream.h"
 #include "dbus_messageostream.h"
 #include "dbus_messageprotocol.h"
-#include "dbus_validation.h"
 
+#include <sstream>
 /*
 Structs and dict entries are marshalled in the same way as their contents, but
 their alignment is always to an 8-byte boundary, even if their contents would
@@ -45,73 +45,67 @@ The first field in the DICT_ENTRY is always the key. A message is considered
 corrupt if the same key occurs twice in the same array of DICT_ENTRY. However,
 for performance reasons implementations are not required to reject dicts with
 duplicate keys.
-
-
 */
 
-const std::string DBus::Type::DictEntry::s_StaticTypeCode("{");
+DBus::Type::DictEntry::DictEntry(const std::string& signature)
+    : m_signature(signature.substr(1, signature.size() - 2))
+{
+}
 
-DBus::Type::DictEntry::DictEntry(const DBus::Type::Generic& key,
-    const DBus::Type::Generic& value)
+DBus::Type::DictEntry::DictEntry(const DBus::Type::Any& key,
+    const DBus::Type::Any& value)
 {
     set(key, value);
 }
 
-DBus::Type::DictEntry::DictEntry(const std::string& key, std::string& value)
+void DBus::Type::DictEntry::set(const DBus::Type::Any& key,
+    const DBus::Type::Any& value)
 {
-    set(DBus::Type::String(key), DBus::Type::String(value));
-}
-
-DBus::Type::DictEntry::DictEntry(const std::string& key, uint32_t value)
-{
-    set(DBus::Type::String(key), DBus::Type::Uint32(value));
-}
-
-//
-void DBus::Type::DictEntry::set(const DBus::Type::Generic& key,
-    const DBus::Type::Generic& value)
-{
+    if (!key.isBasicType())
+        throw std::runtime_error("DictEntry key has invalid basic type: " +
+                                 key.getSignature());
     m_Value = std::make_pair(key, value);
-    m_Signature = "{" + Type::getMarshallingSignature(m_Value.first) + Type::getMarshallingSignature(m_Value.second) + "}";
 }
 
-std::string DBus::Type::DictEntry::getSignature() const { return m_Signature; }
+std::string DBus::Type::DictEntry::getSignature() const
+{
+    return code_start + key().getSignature() + value().getSignature() + code_end;
+}
 
 void DBus::Type::DictEntry::marshall(MessageOStream& stream) const
 {
-
     stream.pad8();
 
-    DBus::Type::marshallData(m_Value.first, stream);
-    DBus::Type::marshallData(m_Value.second, stream);
+    key().marshall(stream);
+    value().marshall(stream);
 }
 
 void DBus::Type::DictEntry::unmarshall(MessageIStream& stream)
 {
     stream.align(8);
 
-    const char key_type = getSignature().at(1);
-    DBus::Validation::throwOnInvalidBasicType(key_type);
-    m_Value.first = Type::create(std::string(1, key_type));
-    m_Value.second = Type::create(DBus::Type::extractSignature(getSignature(), 2));
-    DBus::Type::unmarshallData(m_Value.first, stream);
-    DBus::Type::unmarshallData(m_Value.second, stream);
+    Any key = Type::create(m_signature.getNextTypeCode());
+    Any value = Type::create(m_signature.getNextTypeCode());
+
+    key.unmarshall(stream);
+    value.unmarshall(stream);
+
+    set(key, value);
 }
 
 std::string DBus::Type::DictEntry::toString(const std::string& prefix) const
 {
-    std::stringstream ss;
-    std::string contents_prefix(prefix);
-    contents_prefix += "   ";
+    std::ostringstream oss;
 
-    ss << prefix << "DictEntry (" << getSignature() << ") : {\n";
-    ss << prefix
-       << "   key:   " << DBus::Type::toString(m_Value.first, contents_prefix);
-    ss << prefix
-       << "   value: " << DBus::Type::toString(m_Value.second, contents_prefix);
-    ss << prefix << "}\n";
+    oss << "DictEntry " << getSignature() << " : {\n";
+    oss << prefix << "   key:      " << key().toString();
+    oss << prefix << "   value:    " << value().toString(prefix + "   ");
+    oss << prefix << "}\n";
 
-    return ss.str();
+    return oss.str();
 }
 
-std::string DBus::Type::DictEntry::asString() const { return "[DictEntry]"; }
+std::string DBus::Type::DictEntry::asString() const
+{
+    return getName() + " " + getSignature();
+}

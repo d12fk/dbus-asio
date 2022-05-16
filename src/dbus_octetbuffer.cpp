@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -16,6 +17,7 @@
 // <http://www.gnu.org/licenses/>.
 
 #include "dbus_octetbuffer.h"
+#include "dbus_log.h"
 #include <stdexcept>
 #include <string.h>
 #include <string>
@@ -25,6 +27,22 @@ namespace DBus {
 OctetBuffer::OctetBuffer(const uint8_t* data, size_t size)
     : m_data(data)
     , m_size(size)
+    , m_fds()
+{
+}
+
+OctetBuffer::OctetBuffer(OctetBuffer& other, std::size_t size)
+    : m_data(other.m_data)
+    , m_size(size)
+    , m_fds(other.m_fds)
+{
+}
+
+OctetBuffer::OctetBuffer(const std::uint8_t* data, std::size_t dataSize,
+                         const UnixFdBuffer& fds)
+    : m_data(data)
+    , m_size(dataSize)
+    , m_fds(fds)
 {
 }
 
@@ -69,6 +87,13 @@ size_t OctetBuffer::find(uint8_t byte) const
         }
     }
     return std::string::npos;
+}
+
+int OctetBuffer::getUnixFd(std::uint32_t index) const
+{
+    if (index < m_fds.size())
+        return m_fds[index];
+    throw std::out_of_range("OctetBuffer::getUnixFd index out of range");
 }
 
 } // namespace DBus

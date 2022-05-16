@@ -15,8 +15,8 @@ namespace test {
     {
         // An array of structures
         Type::Signature signature;
-        MessageIStream istream((uint8_t*)stream.data(), stream.size(),
-            byteOrder == __BYTE_ORDER);
+        OctetBuffer buf((uint8_t*)stream.data(), stream.size());
+        MessageIStream istream(buf, byteOrder == __BYTE_ORDER);
         signature.unmarshall(istream);
 
         REQUIRE(signature.asString() == str);
@@ -47,7 +47,7 @@ namespace test {
 
     TEST_CASE("Marshall and unmarshall signature")
     {
-        const std::string str("{ii}");
+        const std::string str("a{ii}");
         Type::Signature dbusString(str);
 
         MessageOStream stream;

@@ -37,7 +37,8 @@ namespace test {
         std::basic_string<uint8_t> data;
         data.append((uint8_t*)&writeValue, sizeof(T));
 
-        MessageIStream istream(data.data(), data.size(), byteOrder != __BYTE_ORDER);
+        OctetBuffer buf(data.data(), data.size());
+        MessageIStream istream(buf, byteOrder != __BYTE_ORDER);
         TestUnmarshallFromMessageIStream<T, D>(value, dbusType, istream);
     }
 

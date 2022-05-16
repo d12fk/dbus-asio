@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,33 +16,58 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_MATCHRULE
-#define DBUS_MATCHRULE
+#pragma once
 
-#include "dbus_message.h"
+#include <stdexcept>
 #include <string>
+#include <map>
 
 namespace DBus {
 
-class MatchRule {
-public:
-    MatchRule(const std::string& rule,
-        const Message::CallbackFunctionSignal& handler);
+// https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
 
-    bool isMatched(const DBus::Message::Signal& signal);
-    void invoke(const DBus::Message::Signal& signal);
+struct BusName;
+struct UniqueName;
+struct MemberName;
+struct InterfaceName;
+struct NamespaceName;
 
-protected:
-    std::string type; // NOTE: Only signals are currentl used/supported
-    std::string sender;
-    std::string interface;
-    std::string member;
-    std::string path;
-    std::string path_namespace;
-    std::string destination;
+class ObjectPath;
 
-    Message::CallbackFunctionSignal callback;
-};
+using InvalidMatchRule = std::runtime_error;
+
+    class MatchRule {
+    public:
+        static constexpr std::size_t MaximumIndex = 63;
+        enum class Type{ MethodCall, MethodReturn, Signal, Error };
+
+        MatchRule& type(Type type);
+        MatchRule& sender(const BusName& name);
+        MatchRule& interface(const InterfaceName& name);
+        MatchRule& member(const MemberName& name);
+        MatchRule& path(const ObjectPath& name);
+        MatchRule& pathNamespace(const ObjectPath& name);
+        MatchRule& destination(const UniqueName& name);
+        MatchRule& arg0Namespace(const NamespaceName& name);
+        MatchRule& arg(std::uint8_t index, const std::string& string);
+        MatchRule& argPath(std::uint8_t index, const std::string& string);
+
+        std::string str() const;
+
+    protected:
+        void escapeApostrophes(std::string& value);
+
+        std::string m_type;
+        std::string m_sender;
+        std::string m_interface;
+        std::string m_member;
+        std::string m_path;
+        std::string m_pathNamespace;
+        std::string m_destination;
+        std::string m_arg0Namespace;
+
+        std::map<std::uint8_t, std::string> m_arg;
+        std::map<std::uint8_t, std::string> m_argPath;
+    };
+
 } // namespace DBus
-
-#endif //  DBUS_MATCHRULE

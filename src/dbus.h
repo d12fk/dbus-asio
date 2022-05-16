@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -15,18 +16,21 @@
 // file named COPYING. If you do not have this file see
 // <http://www.gnu.org/licenses/>.
 
-#ifndef DBUS_H
-#define DBUS_H
+#pragma once
+
+#include "dbus_asio.h"
 
 // Core elements and types
 #include "dbus_log.h"
+#include "dbus_names.h"
 #include "dbus_platform.h"
 #include "dbus_utils.h"
+#include "dbus_error.h"
 
 // Marshall/unmarshalling types
 #include "dbus_type.h"
+#include "dbus_type_any.h"
 #include "dbus_type_array.h"
-#include "dbus_type_base.h"
 #include "dbus_type_boolean.h"
 #include "dbus_type_byte.h"
 #include "dbus_type_dictentry.h"
@@ -41,6 +45,7 @@
 #include "dbus_type_uint16.h"
 #include "dbus_type_uint32.h"
 #include "dbus_type_uint64.h"
+#include "dbus_type_unixfd.h"
 #include "dbus_type_variant.h"
 
 // Functionality
@@ -49,10 +54,8 @@
 #include "dbus_message.h"
 #include "dbus_messageostream.h"
 #include "dbus_messageprotocol.h"
-#include "dbus_native.h"
 #include "dbus_transport.h"
+#include "dbus_connection.h"
 
 // Introspective library
 #include "dbus_introspectable.h"
-
-#endif // DBUS_H

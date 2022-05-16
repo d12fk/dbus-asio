@@ -1,5 +1,6 @@
 // This file is part of dbus-asio
 // Copyright 2018 Brightsign LLC
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
 //
 // This library is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -21,21 +22,9 @@
 #include <iomanip>
 #include <sstream>
 
-const std::string DBus::Type::Byte::s_StaticTypeCode("y");
-
-DBus::Type::Byte::Byte()
-    : m_Value(0)
-{
-    setSignature(s_StaticTypeCode);
-}
-
-DBus::Type::Byte::Byte(size_t v)
+DBus::Type::Byte::Byte(const std::uint8_t& v)
     : m_Value(v)
-{
-    setSignature(s_StaticTypeCode);
-}
-
-DBus::Type::Byte::Byte(const Byte& b) { m_Value = b.m_Value; }
+{}
 
 void DBus::Type::Byte::marshall(MessageOStream& stream) const
 {
@@ -47,15 +36,15 @@ void DBus::Type::Byte::unmarshall(MessageIStream& data)
     m_Value = data.read();
 }
 
-std::string DBus::Type::Byte::toString(const std::string& prefix) const
+std::string DBus::Type::Byte::toString(const std::string&) const
 {
-    std::stringstream ss;
+    std::ostringstream oss;
 
-    ss << prefix << "Byte ";
-    ss << (size_t)m_Value << " (0x" << std::hex << std::setfill('0')
-       << std::setw(2) << int(uint8_t(m_Value)) << ")\n";
+    oss << "Byte "
+        << (size_t)m_Value << " (0x" << std::hex << std::setfill('0')
+        << std::setw(2) << int(uint8_t(m_Value)) << ")\n";
 
-    return ss.str();
+    return oss.str();
 }
 
 std::string DBus::Type::Byte::asString() const

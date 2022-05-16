@@ -11,26 +11,15 @@ using namespace std::chrono;
 size_t gTotalSuccesses = 0;
 std::mutex gMutexOutput;
 std::mutex gMutexSuccessCount;
-std::mutex gMutexReplyErrorCount;
-std::mutex gMutexReplyResultCount;
 
 bool testClient(const std::string& stubname, size_t iterations)
 {
     DBus::Log::setLevel(DBus::Log::INFO);
 
-    DBus::Native native(DBus::Platform::getSessionBus());
-
-    native.BeginAuth(DBus::AuthenticationProtocol::AUTH_BASIC);
-
-    native.callHello(
-        [](const DBus::Message::MethodReturn& msg) {
-            std::cerr << "Ready. Client on "
-                      << DBus::Type::asString(msg.getParameter(0)) << std::endl;
-        },
-        [](const DBus::Message::Error& msg) {
-            std::cerr << "Failed to get hello message. Aborting early" << std::endl;
-            return -1;
-        });
+    DBus::asio::io_context ioc;
+    DBus::Connection::Ptr dbus = DBus::Connection::create(ioc);
+    if (!dbus)
+        return false;
 
     milliseconds ms_start = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
 
@@ -38,80 +27,76 @@ bool testClient(const std::string& stubname, size_t iterations)
     size_t correct = 0;
     size_t errors = 0;
     size_t sent = 0;
-    for (; sent < iterations; ++sent) {
-        std::string expected(stubname);
-        std::string number(std::to_string(sent));
-        expected += " ";
-        expected += number;
 
-        DBus::Message::MethodCallParametersIn params;
-        params.add(stubname);
-        params.add(number);
-
-        DBus::Message::MethodCall concat(DBus::Message::MethodCallIdentifier(
-                                             "/", "biz.brightsign.test", "concat"),
-            params);
-        native.sendMethodCall(
-            "biz.brightsign", concat,
-            [&replies, &correct, expected](const DBus::Message::MethodReturn& msg) {
-                std::lock_guard<std::mutex> guard(gMutexReplyResultCount);
-                std::string result = DBus::Type::asString(msg.getParameter(0));
-                ++replies;
-                if (result == expected) {
-                    ++correct;
-                }
-            },
-            [&errors](const DBus::Message::Error& msg) {
-                std::lock_guard<std::mutex> guard(gMutexReplyErrorCount);
-                ++errors;
-            });
-
-        // If we have a short delay (e.g. 1ms) between messages, everything is happy
-        // for 10-10-100 If this is 10ms, then the timeouts below happen a lot more
-        // frequently. ATM, I can't tell if this is coincidence, or intentional.
-        // std::this_thread::sleep_for(message_sleep);
-    }
-
-    // We don't get a callback upon timeout. We use a separate loop to check for
-    // that posibility, so we don't hang in this method. libdbus (as used by the
-    // daemon) will timeout a request after 25 seconds. So, if there's anything
-    // left as that time, we're not going to get a reply, so timeout that and
-    // everything else.
     milliseconds timeout = std::chrono::seconds(45);
-    milliseconds ms_timeout_starts = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
-    milliseconds ms_end;
+    DBus::asio::steady_timer timer(ioc);
+    timer.expires_after(timeout);
+    timer.async_wait(
+        [dbus]
+        (const DBus::error_code& error)
+        {
+            if (!error)
+                dbus->disconnect();
+        });
 
-    do {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    dbus->connect(
+        DBus::Platform::getSessionBus(),
+        DBus::AuthenticationProtocol::create(),
+        [dbus, &timer, &errors, &replies, &correct, &sent, &stubname, iterations]
+        (const DBus::Error& error, const std::string&, const std::string&) {
+            if (error)
+                return;
 
-        ms_end = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+            while (sent < iterations) {
+                const std::string number(std::to_string(sent++));
+                const std::string expected(stubname + ' ' + number);
 
-        if (ms_end - ms_timeout_starts > timeout) {
-            std::cerr << "Timing out..." << std::endl;
-            break;
-        }
-    } while (sent != replies + errors);
+                dbus->sendMethodCall(
+                    { "biz.brightsign",
+                      {"/", "biz.brightsign.test", "concat"}, {stubname, number} },
+                    [dbus, &timer, &errors, &replies, &correct, expected, iterations]
+                    (const DBus::Error& error, const DBus::Message::MethodReturn& reply) {
+                        if (error)
+                            ++errors;
+                        else {
+                            ++replies;
+                            const auto result = reply.getParameter(0).asString();
+                            if (result == expected)
+                                ++correct;
+                        }
+
+                        if (errors + replies == iterations) {
+                            timer.cancel();
+                            dbus->disconnect();
+                        }
+                    });
+
+                // If we have a short delay (e.g. 1ms) between messages, everything is happy
+                // for 10-10-100 If this is 10ms, then the timeouts below happen a lot more
+                // frequently. ATM, I can't tell if this is coincidence, or intentional.
+                // std::this_thread::sleep_for(message_sleep);
+            }
+        });
+
+    ioc.run();
+
+    milliseconds ms_end = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
 
     std::lock_guard<std::mutex> guard(gMutexOutput);
-
     std::cout << (correct == sent ? "SUCCESS" : "FAILURE");
     std::cout << " " << stubname << ":: Results ::";
     std::cout << "  Sent: " << sent;
     std::cout << "  Replies: " << replies;
     std::cout << "  Correct: " << correct;
     std::cout << "  Errors: " << errors;
-    std::cout << "  Duration: " << std::to_string((ms_end - ms_start).count())
-              << "ms";
+    std::cout << "  Duration: " << (ms_end - ms_start).count() << "ms";
     std::cout << std::endl;
 
     std::cout << "  Parameters: " << std::endl;
-    std::cout << "    Timeout: " << std::to_string(timeout.count()).c_str()
-              << "ms" << std::endl;
-    std::cout << "    Iterations: " << iterations;
-    std::cout << std::endl;
+    std::cout << "    Timeout: " << timeout.count() << "ms" << std::endl;
+    std::cout << "    Iterations: " << iterations << std::endl;
 
-    std::cout << native.getStats();
-    std::cout << std::endl;
+    std::cout << dbus->getStats() << std::endl;
 
     return correct == sent;
 }

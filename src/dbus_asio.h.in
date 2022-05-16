@@ -1,0 +1,95 @@
+// This file is part of dbus-asio
+// Copyright 2022 OpenVPN Inc. <heiko@openvpn.net>
+//
+// This library is free software: you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public License
+// as published by the Free Software Foundation, version 3, or at your
+// option any later version.
+//
+// This library is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// Lesser General Public License for more details.
+//
+// The GNU Lesser General Public License version 3 is included in the
+// file named COPYING. If you do not have this file see
+// <http://www.gnu.org/licenses/>.
+
+#pragma once
+
+#include <@DBUS_ASIO_INCLUDE@>
+
+#include <tuple>
+
+namespace DBus {
+
+namespace asio = @DBUS_ASIO_NAMESPACE@;
+
+using errc = @DBUS_ERROR_CODE_ERRC@;
+using @DBUS_ERROR_CODE_NAMESPACE@::error_code;
+using @DBUS_ERROR_CODE_NAMESPACE@::system_category;
+using @DBUS_MAKE_ERROR_CODE@;
+
+
+template<typename ...Args>
+struct StoredToken : public std::enable_shared_from_this<StoredToken<Args...>>
+{
+    using Ptr = std::shared_ptr<StoredToken<Args...>>;
+
+    template <typename CompletionToken>
+    static Ptr create(asio::io_context& ioc, CompletionToken&& token)
+    {
+        Ptr obj = std::make_shared<StoredToken<Args...>>(ioc);
+        obj->store(std::move(token));
+        return obj;
+    }
+
+    StoredToken(asio::io_context& ioc)
+        : timer_(ioc)
+    {}
+
+    void invoke(Args... args)
+    {
+        args_ = std::make_tuple(args...);
+        timer_.cancel();
+    }
+
+protected:
+    template <typename CompletionToken>
+    void store(CompletionToken&& token)
+    {
+        // never expires
+        timer_.expires_at(std::chrono::steady_clock::time_point::max());
+
+        asio::async_initiate<
+            CompletionToken, void(Args...)>(
+            [self = this->shared_from_this()](auto&& handler) mutable
+            {
+                self->timer_.async_wait(
+                    [self = self->shared_from_this(), handler = std::move(handler)]
+                    (const error_code&) mutable
+                    {
+#if __cplusplus < 201703L
+                        self->apply(std::move(handler), std::index_sequence_for<Args...>{});
+#else
+                        std::apply(handler, self->args_);
+#endif
+                    });
+            },
+            token);
+    }
+
+#if __cplusplus < 201703L
+    template<typename Handler, size_t... Is>
+    void apply(Handler&& handler, std::index_sequence<Is...>)
+    {
+        handler(std::get<Is>(args_)...);
+    }
+#endif
+
+    std::tuple<std::remove_cv_t<std::remove_reference_t<Args>>...> args_;
+    asio::steady_timer timer_;
+};
+
+} // namespace DBus
+

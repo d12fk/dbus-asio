@@ -29,8 +29,8 @@ namespace test {
         stream.writeInt16(value);
 
         Type::Uint16 dbusType;
-        MessageIStream istream((uint8_t*)stream.data.data(), stream.data.size(),
-            false);
+        OctetBuffer buf((uint8_t*)stream.data.data(), stream.data.size());
+        MessageIStream istream(buf, false);
         TestUnmarshallFromMessageIStream<uint16_t, Type::Uint16>(value, dbusType,
             istream);
     }

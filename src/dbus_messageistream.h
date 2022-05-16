@@ -49,7 +49,7 @@ class MessageIStream {
     }
 
 public:
-    MessageIStream(const uint8_t* data, size_t size, bool swapByteOrder);
+    MessageIStream(OctetBuffer& data, bool swapByteOrder);
     MessageIStream(MessageIStream& stream, size_t size);
     bool empty();
 
@@ -58,6 +58,7 @@ public:
     void read(uint8_t* value, size_t size);
     void read(double* value);
     void read(std::string& string, size_t size);
+    int readUnixFd();
 
     template <class T>
     void read(T* value)
