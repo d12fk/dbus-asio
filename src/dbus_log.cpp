@@ -66,7 +66,7 @@ void DBus::Log::writeHex(std::size_t type, const std::string& prefix,
     for (std::size_t i = 0; i < size; ++i) {
         const unsigned char byte = *(first + i);
         oss << std::hex << std::setw(2) << std::setfill('0')
-            << static_cast<const unsigned>(byte) << ' ';
+            << static_cast<unsigned>(byte) << ' ';
         *ascii++ = ::isprint(byte) ? byte : '.';
         if (++column == maxColumns) {
             column = 0;
