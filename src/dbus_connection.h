@@ -344,7 +344,7 @@ public:
     }
 
     template<typename CompletionToken>
-    auto addMatch(const MatchRule& rule, CompletionToken&& token) const
+    auto addMatch(const MatchRule& rule, CompletionToken&& token)
     {
         return sendMethodCall({ DBus::Name,
             {DBus::Object, DBus::Interface, "AddMatch"}, {rule.str()} },
@@ -352,7 +352,7 @@ public:
     }
 
     template<typename CompletionToken>
-    auto removeMatch(const MatchRule& rule, CompletionToken&& token) const
+    auto removeMatch(const MatchRule& rule, CompletionToken&& token)
     {
         return sendMethodCall({ DBus::Name,
             {DBus::Object, DBus::Interface, "RemoveMatch"}, {rule.str()} },
