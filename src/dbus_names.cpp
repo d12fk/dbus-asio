@@ -83,7 +83,7 @@ DBus::Name::validate(const std::string& name, Type type) const
     bool havePeriod = false;
 
     char prev = '.';
-    for (int i = isUnique ? 1 : 0; i < name.size(); ++i) {
+    for (std::size_t i = isUnique ? 1 : 0; i < name.size(); ++i) {
         const char ch = name[i];
         if (allowPeriod && ch == '.') {
             if (prev == '.')

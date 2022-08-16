@@ -93,9 +93,10 @@ public:
                 msg.msg_iov = &iov;
                 msg.msg_iovlen = 1;
 
-                char fdbuf[CMSG_SPACE(self->m_maxRecvUnixFds * sizeof(int))];
-                msg.msg_control = fdbuf;
-                msg.msg_controllen = sizeof(fdbuf);
+                std::size_t fdbufSize = CMSG_SPACE(self->m_maxRecvUnixFds * sizeof(int));
+                std::unique_ptr<char> fdbuf(::new char[fdbufSize]);
+                msg.msg_control = fdbuf.get();
+                msg.msg_controllen = fdbufSize;
 
                 ssize_t read_total = 0;
                 do {
@@ -163,9 +164,10 @@ public:
                     msg.msg_iovlen = 1;
 
                     const size_t fdlen = payload->fds.size() * sizeof(int);
-                    char fdbuf[CMSG_SPACE(fdlen)];
-                    msg.msg_control = fdbuf;
-                    msg.msg_controllen = sizeof(fdbuf);
+                    std::size_t fdbufSize = CMSG_SPACE(fdlen);
+                    std::unique_ptr<char> fdbuf(::new char[fdbufSize]);
+                    msg.msg_control = fdbuf.get();
+                    msg.msg_controllen = fdbufSize;
 
                     struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
                     cmsg->cmsg_len = CMSG_LEN(fdlen);

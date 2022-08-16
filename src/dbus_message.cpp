@@ -233,7 +233,7 @@ DBus::Message::Header::getSize(const OctetBuffer& message)
 
     // Add size of the header fields array
     const Endian endianness = Message::endianness(message);
-    size += correctEndianess(endianness, *(uint32_t*)(message.data() + 12));
+    size += correctEndianess(endianness, *reinterpret_cast<uint32_t const *>(message.data() + 12));
     // Add padding to an 8 byte boundary
     size += (size % 8 == 0) ? 0 : 8 - (size % 8);
 
@@ -250,7 +250,7 @@ DBus::Message::Header::getMessageSize(const OctetBuffer& message)
         return 0; // TODO: throw instead?
 
     const Endian endianness = Message::endianness(message);
-    std::size_t body_size = correctEndianess(endianness, *(uint32_t*)(message.data() + 4));
+    std::size_t body_size = correctEndianess(endianness, *reinterpret_cast<uint32_t const*>(message.data() + 4));
     std::size_t msg_size = getSize(message) + body_size;
 
     if (msg_size > Message::MaximumSize)

@@ -19,13 +19,20 @@
 
 #include "dbus_asio.h"
 #include "dbus_auth.h"
+#include "dbus_matchrule.h"
 #include "dbus_messageprotocol.h"
 #include "dbus_transport.h"
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace DBus {
+
+struct WellKnownName;
 
 static constexpr char const *Name = "org.freedesktop.DBus";
 static constexpr char const *Object = "/org/freedesktop/DBus";
@@ -344,7 +351,7 @@ public:
     }
 
     template<typename CompletionToken>
-    auto addMatch(const MatchRule& rule, CompletionToken&& token) const
+    auto addMatch(const MatchRule& rule, CompletionToken&& token)
     {
         return sendMethodCall({ DBus::Name,
             {DBus::Object, DBus::Interface, "AddMatch"}, {rule.str()} },
@@ -352,7 +359,7 @@ public:
     }
 
     template<typename CompletionToken>
-    auto removeMatch(const MatchRule& rule, CompletionToken&& token) const
+    auto removeMatch(const MatchRule& rule, CompletionToken&& token)
     {
         return sendMethodCall({ DBus::Name,
             {DBus::Object, DBus::Interface, "RemoveMatch"}, {rule.str()} },

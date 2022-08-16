@@ -60,7 +60,7 @@ void DBus::Type::Array::marshall(MessageOStream& stream) const
     if (contentsSize > Array::MaximumSize)
         throw std::out_of_range("Array " + getSignature() +
             ": size " + std::to_string(contentsSize) + " exceeds 64 MiB");
-    stream.data.replace(sizePos, 4, (char*)&contentsSize, sizeof(uint32_t));
+    stream.data.replace(sizePos, 4, reinterpret_cast<const char*>(&contentsSize), sizeof(uint32_t));
 }
 
 void DBus::Type::Array::unmarshall(MessageIStream& stream)
